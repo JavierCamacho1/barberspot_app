@@ -1,9 +1,10 @@
-// lib/screens/login_screen.dart
 import 'package:flutter/material.dart';
-// ¡Importante! Añadiremos estas librerías para la conexión
 import 'package:http/http.dart' as http;
 import 'dart:convert';
-import 'register_screen.dart'; // <--- ¡AÑADE ESTA LÍNEA!
+import 'package:shared_preferences/shared_preferences.dart'; // Import para guardar sesión
+import 'home_screen.dart'; // Para FASE 3
+import 'map_screen.dart'; // Para FASE 2
+import 'register_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -20,11 +21,10 @@ class _LoginScreenState extends State<LoginScreen> {
   // Para mostrar un mensaje de carga
   bool _isLoading = false;
 
-  // --- FUNCIÓN PARA EL LOGIN (CONECTADA A LA API) ---
+  // --- FUNCIÓN PARA EL LOGIN (CON LÓGICA DE REDIRECCIÓN) ---
   Future<void> _login() async {
     // Validar que los campos no estén vacíos
     if (_telefonoController.text.isEmpty || _passwordController.text.isEmpty) {
-      // Opcional: Mostrar un mensaje de error
       print("Error: Los campos no pueden estar vacíos.");
       return;
     }
@@ -33,8 +33,6 @@ class _LoginScreenState extends State<LoginScreen> {
       _isLoading = true;
     });
 
-    // La URL de tu API de FastAPI. 
-    // Usamos localhost porque el backend corre en tu misma máquina.
     final String apiUrl = "http://localhost:8000/login";
 
     try {
@@ -43,33 +41,67 @@ class _LoginScreenState extends State<LoginScreen> {
         headers: {
           'Content-Type': 'application/json; charset=UTF-8',
         },
-        // Convertimos los datos de Dart a un string JSON
         body: json.encode({
           'telefono': _telefonoController.text,
           'password': _passwordController.text,
         }),
       );
 
-      // Decodificamos la respuesta JSON
       final Map<String, dynamic> responseData = json.decode(response.body);
 
       if (response.statusCode == 200) {
-        // ¡Éxito!
         print("Login exitoso!");
-        print("Datos del usuario: $responseData");
-        // Aquí es donde guardaremos la sesión y navegaremos a la
-        // pantalla de inicio (Fase 2)
-        // Por ahora, solo imprimimos el rol:
-        print("Rol del usuario: ${responseData['rol']}");
+
+        // --- 1. GUARDAMOS LA SESIÓN ---
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setInt('user_id', responseData['id']);
+        await prefs.setString('user_nombre', responseData['nombre']);
+        await prefs.setString('user_rol', responseData['rol']);
+        
+        final String? barberiaIdString = responseData['barberia_id']?.toString();
+        await prefs.setString('barberia_id', barberiaIdString ?? 'null');
+        
+        // --- 2. LÓGICA DE REDIRECCIÓN (IGUAL AL SPLASHSCREEN) ---
+        final String userRol = responseData['rol'];
+
+        if (mounted) {
+          if (userRol == 'cliente') {
+            if (barberiaIdString == null || barberiaIdString == 'null') {
+              // 3. Es cliente SIN barbería -> Enviar al MAPA (FASE 2)
+              Navigator.of(context).pushReplacement(
+                MaterialPageRoute(builder: (context) => const MapScreen()),
+              );
+            } else {
+              // 4. Es cliente CON barbería -> Enviar a Home (FASE 3)
+              Navigator.of(context).pushReplacement(
+                MaterialPageRoute(builder: (context) => const HomeScreen()),
+              );
+            }
+          } else {
+            // 5. Es Barbero o Admin -> Enviar a Home (FASE 4 y 5)
+            Navigator.of(context).pushReplacement(
+              MaterialPageRoute(builder: (context) => const HomeScreen()),
+            );
+          }
+        }
         
       } else {
         // Error desde la API (ej. contraseña incorrecta)
         print("Error en el login: ${responseData['detail']}");
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Error: ${responseData['detail']}')),
+          );
+        }
       }
-
     } catch (e) {
-      // Error de conexión (ej. el servidor FastAPI no está corriendo)
+      // Error de conexión
       print("Error de conexión: $e");
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error de conexión. Revisa el servidor.')),
+        );
+      }
     }
 
     setState(() {
@@ -154,10 +186,10 @@ class _LoginScreenState extends State<LoginScreen> {
                 Navigator.of(context).push(
                 MaterialPageRoute(
                 builder: (context) => const RegisterScreen(), ),
-               );
-             },
+                );
+              },
                 child: const Text('¿No tienes cuenta? Regístrate'),
-             ),
+              ),
             ],
           ),
         ),
