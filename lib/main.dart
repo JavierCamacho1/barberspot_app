@@ -1,6 +1,6 @@
 // lib/main.dart
 import 'package:flutter/material.dart';
-import 'screens/login_screen.dart'; // Importa tu nueva pantalla
+import 'screens/splash_screen.dart';
 
 void main() {
   runApp(const BarberSpotApp());
@@ -22,7 +22,7 @@ class BarberSpotApp extends StatelessWidget {
         ),
         scaffoldBackgroundColor: const Color(0xFF1A1A1A), // Fondo gris oscuro
       ),
-      home: const LoginScreen(), // ¡Esta es tu nueva pantalla!
+      home: const SplashScreen(), // Antes era LoginScreen()
     );
   }
 }
