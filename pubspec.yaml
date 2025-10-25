@@ -30,17 +30,16 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+  # --- ¡ESTA ES LA FORMA CORRECTA! ---
+  flutter_localizations:
+    sdk: flutter
+  # --- FIN DE LA CORRECCIÓN ---
 
-    # --- Paquetes que vamos a añadir ---
-
-  # Para hacer las llamadas a nuestra API (POST, GET, etc.)
+  # --- Tus otros paquetes ---
   http: ^1.2.1
-
-  # Para guardar la sesión del usuario (recordar si ya inició sesión)
   shared_preferences: ^2.2.3
-
-  # google maps
   google_maps_flutter: ^2.6.1
+  intl: ^0.20.2
 
   # The following adds the Cupertino Icons font to your application.
   # Use with the CupertinoIcons class for iOS style icons.
