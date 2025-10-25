@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart'; // Para leer el user_id
+import 'package:shared_preferences/shared_preferences.dart'; // Para leer el user_id y actualizar barberia_id
 import 'package:http/http.dart' as http; // Para llamar a la API de confirmar
 import 'dart:convert';
-import 'home_screen.dart'; // A donde iremos después de confirmar
+import 'client_home_screen.dart';
 
 class BarberiaProfileScreen extends StatefulWidget {
   final int barberiaId; // Recibe el ID desde el mapa
@@ -22,27 +22,81 @@ class _BarberiaProfileScreenState extends State<BarberiaProfileScreen> {
   bool _isLoading = false;
   // TODO: Añadir variables para guardar más detalles (dirección, horario) si los cargamos
 
-  // --- FUNCIÓN PARA CONFIRMAR ASOCIACIÓN (AÚN NO IMPLEMENTADA) ---
+  // --- FUNCIÓN PARA CONFIRMAR ASOCIACIÓN (IMPLEMENTADA) ---
   Future<void> _confirmarAsociacion() async {
-    print("Confirmando asociación con barbería ID: ${widget.barberiaId}");
     setState(() => _isLoading = true);
 
-    // TODO: Llamar a la API del backend para asociar
-    // TODO: Actualizar SharedPreferences con el nuevo barberia_id
-    // TODO: Navegar a HomeScreen
+    final prefs = await SharedPreferences.getInstance();
+    final int? userId = prefs.getInt('user_id'); // Leemos el ID del usuario logueado
 
-    // Simulación
-    await Future.delayed(const Duration(seconds: 2));
+    if (userId == null) {
+      // Si no encontramos el ID (algo raro), mostramos error
+      print("Error: No se pudo obtener el ID del usuario.");
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Error: No se pudo identificar al usuario.')),
+        );
+      }
+      setState(() => _isLoading = false);
+      return;
+    }
 
-    // Ejemplo de navegación (DESPUÉS de confirmar con éxito)
-    // if (mounted) {
-    //   Navigator.of(context).pushAndRemoveUntil(
-    //     MaterialPageRoute(builder: (context) => const HomeScreen()),
-    //     (Route<dynamic> route) => false, // Elimina todas las rutas anteriores
-    //   );
-    // }
+    final String apiUrl = "http://127.0.0.1:8000/usuarios/asociar_barberia"; // Endpoint del backend
 
-    setState(() => _isLoading = false);
+    try {
+      final response = await http.put(
+        Uri.parse(apiUrl),
+        headers: {'Content-Type': 'application/json; charset=UTF-8'},
+        body: json.encode({
+          'user_id': userId,
+          'barberia_id': widget.barberiaId, // El ID de la barbería de esta pantalla
+        }),
+      );
+
+      if (!mounted) return; // Verificar si el widget sigue montado
+
+      if (response.statusCode == 200) {
+        // ¡Éxito en el backend!
+        print("Asociación exitosa en backend.");
+
+        // Ahora actualizamos la sesión local
+        await prefs.setString('barberia_id', widget.barberiaId.toString());
+        print("SharedPreferences actualizado con barberia_id: ${widget.barberiaId}");
+
+        // --- ¡AÑADE ESTA LÍNEA PARA GUARDAR EL NOMBRE! ---
+        await prefs.setString('barberia_nombre', widget.nombreBarberia); 
+
+        print("SharedPreferences actualizado con barberia_id: ${widget.barberiaId} y nombre: ${widget.nombreBarberia}");
+
+        // Navegamos al HomeScreen y eliminamos todas las pantallas anteriores
+        Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute(builder: (context) => const ClientHomeScreen()),
+          (Route<dynamic> route) => false, // Elimina Login, Splash, Mapa, Perfil
+        );
+
+      } else {
+        // Error desde la API
+        final Map<String, dynamic> responseData = json.decode(response.body);
+        print("Error al asociar: ${responseData['detail']}");
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: ${responseData['detail']}')),
+        );
+      }
+
+    } catch (e) {
+      // Error de conexión
+      print("Error de conexión al asociar: $e");
+       if (mounted) {
+         ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Error de conexión al confirmar.')),
+        );
+       }
+    }
+
+    // Solo ponemos isLoading a false si hubo un error (si tuvo éxito, ya navegó)
+    if (mounted) {
+       setState(() => _isLoading = false);
+    }
   }
 
   @override
@@ -58,9 +112,7 @@ class _BarberiaProfileScreenState extends State<BarberiaProfileScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // TODO: Mostrar más detalles de la barbería aquí (Dirección, Horario)
-            // Podríamos cargarlos con otra llamada a la API usando widget.barberiaId
-            // Por ahora, solo mostramos el nombre que ya tenemos.
+            // TODO: Mostrar más detalles de la barbería aquí
             Text(
               'Dirección: [Dirección de la barbería aquí]', // Placeholder
               style: TextStyle(fontSize: 16, color: Colors.grey[400]),
@@ -78,7 +130,7 @@ class _BarberiaProfileScreenState extends State<BarberiaProfileScreen> {
                 : SizedBox(
                     width: double.infinity,
                     child: ElevatedButton(
-                      onPressed: _confirmarAsociacion,
+                      onPressed: _confirmarAsociacion, // Llama a la nueva función
                       style: ElevatedButton.styleFrom(
                         padding: const EdgeInsets.symmetric(vertical: 16),
                         shape: RoundedRectangleBorder(

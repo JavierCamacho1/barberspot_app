@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'login_screen.dart';  // A dónde ir si NO hay sesión
-import 'home_screen.dart';   // A dónde ir si SÍ hay sesión
+import 'client_home_screen.dart';
 import 'map_screen.dart'; // <--- ¡ASEGÚRATE DE TENER ESTO!
 
 class SplashScreen extends StatefulWidget {
@@ -43,13 +43,13 @@ class _SplashScreenState extends State<SplashScreen> {
       } else {
         // 4. Es cliente CON barbería -> Enviar a Home (FASE 3)
         Navigator.of(context).pushReplacement(
-          MaterialPageRoute(builder: (context) => const HomeScreen()),
+          MaterialPageRoute(builder: (context) => const ClientHomeScreen()),
         );
       }
     } else {
       // 5. Es Barbero o Admin -> Enviar a Home (FASE 4 y 5)
       Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (context) => const HomeScreen()),
+        MaterialPageRoute(builder: (context) => const ClientHomeScreen()),
       );
     }
   }

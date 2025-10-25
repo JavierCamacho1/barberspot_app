@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart'; // Import para guardar sesión
-import 'home_screen.dart'; // Para FASE 3
+import 'client_home_screen.dart';
 import 'map_screen.dart'; // Para FASE 2
 import 'register_screen.dart';
 
@@ -74,13 +74,13 @@ class _LoginScreenState extends State<LoginScreen> {
             } else {
               // 4. Es cliente CON barbería -> Enviar a Home (FASE 3)
               Navigator.of(context).pushReplacement(
-                MaterialPageRoute(builder: (context) => const HomeScreen()),
+                MaterialPageRoute(builder: (context) => const ClientHomeScreen()),
               );
             }
           } else {
             // 5. Es Barbero o Admin -> Enviar a Home (FASE 4 y 5)
             Navigator.of(context).pushReplacement(
-              MaterialPageRoute(builder: (context) => const HomeScreen()),
+              MaterialPageRoute(builder: (context) => const ClientHomeScreen()),
             );
           }
         }
