@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
-import 'package:shared_preferences/shared_preferences.dart'; // Import para guardar sesión
+import 'package:shared_preferences/shared_preferences.dart';
 import 'client_home_screen.dart';
-import 'map_screen.dart'; // Para FASE 2
 import 'register_screen.dart';
+import 'map_screen.dart'; // Para la lógica de redirección
+// --- ¡IMPORTACIÓN PARA RESET! ---
+import 'request_reset_screen.dart';
+// --- FIN IMPORTACIÓN ---
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -14,79 +17,75 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
-  // Controladores para leer el texto de los campos
   final TextEditingController _telefonoController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
-
-  // Para mostrar un mensaje de carga
   bool _isLoading = false;
 
-  // --- FUNCIÓN PARA EL LOGIN (CON LÓGICA DE REDIRECCIÓN) ---
   Future<void> _login() async {
-    // Validar que los campos no estén vacíos
     if (_telefonoController.text.isEmpty || _passwordController.text.isEmpty) {
-      print("Error: Los campos no pueden estar vacíos.");
+      if (mounted) {
+         ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Por favor, ingresa teléfono y contraseña.')),
+        );
+      }
       return;
     }
 
+    if (!mounted) return;
     setState(() {
       _isLoading = true;
     });
 
-    final String apiUrl = "http://localhost:8000/login";
+    final String apiUrl = "http://127.0.0.1:8000/login"; // Usa 10.0.2.2 para emulador Android
 
     try {
       final response = await http.post(
         Uri.parse(apiUrl),
-        headers: {
-          'Content-Type': 'application/json; charset=UTF-8',
-        },
+        headers: {'Content-Type': 'application/json; charset=UTF-8'},
         body: json.encode({
           'telefono': _telefonoController.text,
           'password': _passwordController.text,
         }),
-      );
+      ).timeout(const Duration(seconds: 10)); // Timeout añadido
+
+      if (!mounted) return; // Verificar después del await
 
       final Map<String, dynamic> responseData = json.decode(response.body);
 
       if (response.statusCode == 200) {
         print("Login exitoso!");
-
-        // --- 1. GUARDAMOS LA SESIÓN ---
         final prefs = await SharedPreferences.getInstance();
         await prefs.setInt('user_id', responseData['id']);
         await prefs.setString('user_nombre', responseData['nombre']);
         await prefs.setString('user_rol', responseData['rol']);
-        
-        final String? barberiaIdString = responseData['barberia_id']?.toString();
-        await prefs.setString('barberia_id', barberiaIdString ?? 'null');
-        
-        // --- 2. LÓGICA DE REDIRECCIÓN (IGUAL AL SPLASHSCREEN) ---
-        final String userRol = responseData['rol'];
+        final String? barberiaIdStr = responseData['barberia_id']?.toString();
+        await prefs.setString('barberia_id', barberiaIdStr ?? 'null');
 
-        if (mounted) {
-          if (userRol == 'cliente') {
-            if (barberiaIdString == null || barberiaIdString == 'null') {
-              // 3. Es cliente SIN barbería -> Enviar al MAPA (FASE 2)
-              Navigator.of(context).pushReplacement(
-                MaterialPageRoute(builder: (context) => const MapScreen()),
-              );
-            } else {
-              // 4. Es cliente CON barbería -> Enviar a Home (FASE 3)
-              Navigator.of(context).pushReplacement(
-                MaterialPageRoute(builder: (context) => const ClientHomeScreen()),
-              );
-            }
-          } else {
-            // 5. Es Barbero o Admin -> Enviar a Home (FASE 4 y 5)
+        // --- Lógica de Redirección Inteligente ---
+        final String userRol = responseData['rol'];
+        final bool tieneBarberia = barberiaIdStr != null && barberiaIdStr != 'null';
+
+        if (!mounted) return; // Verificar antes de navegar
+
+        if (userRol == 'cliente') {
+          if (tieneBarberia) {
             Navigator.of(context).pushReplacement(
-              MaterialPageRoute(builder: (context) => const ClientHomeScreen()),
+              MaterialPageRoute(builder: (context) => const ClientHomeScreen()), // Ir a Home Cliente
+            );
+          } else {
+            Navigator.of(context).pushReplacement(
+              MaterialPageRoute(builder: (context) => const MapScreen()), // Ir al Mapa
             );
           }
+        } else {
+          // TODO: Redirigir a pantalla de Barbero/Admin (FASE 4/5)
+          Navigator.of(context).pushReplacement(
+            MaterialPageRoute(builder: (context) => const ClientHomeScreen()), // Temporalmente a Home Cliente
+          );
         }
-        
+        // --- Fin Lógica Redirección ---
+
       } else {
-        // Error desde la API (ej. contraseña incorrecta)
         print("Error en el login: ${responseData['detail']}");
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -94,19 +93,21 @@ class _LoginScreenState extends State<LoginScreen> {
           );
         }
       }
+
     } catch (e) {
-      // Error de conexión
       print("Error de conexión: $e");
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error de conexión. Revisa el servidor.')),
+          const SnackBar(content: Text('Error de conexión. Revisa el servidor.')),
         );
       }
+    } finally {
+       if (mounted) { // Ensure widget is still mounted before calling setState
+         setState(() {
+           _isLoading = false;
+         });
+       }
     }
-
-    setState(() {
-      _isLoading = false;
-    });
   }
 
   @override
@@ -118,7 +119,6 @@ class _LoginScreenState extends State<LoginScreen> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              // Título (puedes cambiarlo por tu logo)
               const Text(
                 'BarberSpot',
                 style: TextStyle(
@@ -128,68 +128,67 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
               ),
               const SizedBox(height: 48),
-
-              // --- Campo de Teléfono ---
               TextField(
                 controller: _telefonoController,
                 keyboardType: TextInputType.phone,
                 decoration: InputDecoration(
                   labelText: 'Número de Teléfono',
                   prefixIcon: const Icon(Icons.phone),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
+                  // Usar tema definido en main.dart
                 ),
               ),
               const SizedBox(height: 20),
-
-              // --- Campo de Contraseña ---
               TextField(
                 controller: _passwordController,
-                obscureText: true, // Oculta la contraseña
+                obscureText: true,
                 decoration: InputDecoration(
                   labelText: 'Contraseña',
                   prefixIcon: const Icon(Icons.lock),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
+                   // Usar tema definido en main.dart
                 ),
               ),
               const SizedBox(height: 32),
-
-              // --- Botón de Login ---
               _isLoading
-                  ? const CircularProgressIndicator() // Muestra esto si está cargando
+                  ? const CircularProgressIndicator()
                   : SizedBox(
                       width: double.infinity,
                       child: ElevatedButton(
-                        onPressed: _login, // Llama a la función _login
-                        style: ElevatedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(vertical: 16),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                        ),
-                        child: const Text(
-                          'Iniciar Sesión',
-                          style: TextStyle(fontSize: 18),
-                        ),
+                        onPressed: _login,
+                        // Estilo tomado del tema en main.dart
+                        child: const Text('Iniciar Sesión'),
                       ),
                     ),
-              
               const SizedBox(height: 24),
-
-              // --- Botón para ir a Registro ---
-                TextButton(
+              TextButton(
                 onPressed: () {
-                // --- ¡ LÓGICA DE NAVEGACIÓN! ---
-                Navigator.of(context).push(
-                MaterialPageRoute(
-                builder: (context) => const RegisterScreen(), ),
-                );
-              },
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (context) => const RegisterScreen(),
+                    ),
+                  );
+                },
                 child: const Text('¿No tienes cuenta? Regístrate'),
               ),
+
+              // --- ¡NUEVO ENLACE AÑADIDO! ---
+              const SizedBox(height: 10), // Espacio
+              TextButton(
+                onPressed: () {
+                  // Navega a la pantalla para solicitar el reseteo
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      // Asegúrate de crear este archivo: request_reset_screen.dart
+                      builder: (context) => const RequestResetScreen(),
+                    ),
+                  );
+                },
+                 style: TextButton.styleFrom(padding: EdgeInsets.zero), // Reduce padding
+                child: Text(
+                  '¿Olvidaste tu contraseña?',
+                   style: TextStyle(color: Colors.grey[400], fontSize: 14), // Estilo sutil
+                ),
+              ),
+              // --- FIN ENLACE AÑADIDO ---
             ],
           ),
         ),
