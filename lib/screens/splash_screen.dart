@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'login_screen.dart';  // A dónde ir si NO hay sesión
 import 'client_home_screen.dart';
-import 'map_screen.dart'; // <--- ¡ASEGÚRATE DE TENER ESTO!
+import 'map_screen.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
