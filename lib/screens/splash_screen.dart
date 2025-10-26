@@ -3,6 +3,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'login_screen.dart';  // A dónde ir si NO hay sesión
 import 'client_home_screen.dart';
 import 'map_screen.dart';
+import 'barber_home_screen.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -23,35 +24,43 @@ class _SplashScreenState extends State<SplashScreen> {
   final String? userRol = prefs.getString('user_rol');
   final String? barberiaId = prefs.getString('barberia_id');
 
-  await Future.delayed(const Duration(seconds: 2));
+  await Future.delayed(const Duration(seconds: 1)); // Espera corta
   if (!mounted) return;
 
-  // --- LÓGICA DE REDIRECCIÓN (FASE 2) ---
+  // --- LÓGICA DE REDIRECCIÓN (CORREGIDA) ---
   if (userRol == null) {
-    // 1. No hay sesión -> Enviar a Login
+    // 1. Sin sesión -> Login
     Navigator.of(context).pushReplacement(
       MaterialPageRoute(builder: (context) => const LoginScreen()),
     );
-  } else {
-    // 2. Hay sesión, revisamos el rol
-    if (userRol == 'cliente') {
-      if (barberiaId == null || barberiaId == 'null') {
-        // 3. Es cliente SIN barbería -> Enviar al MAPA (FASE 2)
-        Navigator.of(context).pushReplacement(
-          MaterialPageRoute(builder: (context) => const MapScreen()),
-        );
-      } else {
-        // 4. Es cliente CON barbería -> Enviar a Home (FASE 3)
-        Navigator.of(context).pushReplacement(
-          MaterialPageRoute(builder: (context) => const ClientHomeScreen()),
-        );
-      }
+  } else if (userRol == 'cliente') {
+    // 2. Es Cliente
+    if (barberiaId == null || barberiaId == 'null') {
+      // 2a. Sin barbería -> Mapa
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(builder: (context) => const MapScreen()),
+      );
     } else {
-      // 5. Es Barbero o Admin -> Enviar a Home (FASE 4 y 5)
+      // 2b. Con barbería -> Home Cliente
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(builder: (context) => const ClientHomeScreen()),
       );
     }
+  } else if (userRol == 'barbero') { // <-- ¡ESTA ES LA LÍNEA CLAVE!
+    // 3. Es Barbero -> Home Barbero
+    Navigator.of(context).pushReplacement(
+      MaterialPageRoute(builder: (context) => const BarberHomeScreen()), // <-- VA A BARBER HOME
+    );
+  } else if (userRol == 'admin') {
+    // 4. Es Admin -> TODO: Pantalla Admin (FASE 5)
+     Navigator.of(context).pushReplacement(
+       MaterialPageRoute(builder: (context) => const ClientHomeScreen()), // Temporal
+     );
+  } else {
+    // 5. Rol desconocido -> Login
+     Navigator.of(context).pushReplacement(
+       MaterialPageRoute(builder: (context) => const LoginScreen()),
+     );
   }
 }
 
