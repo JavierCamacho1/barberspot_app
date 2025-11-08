@@ -4,6 +4,7 @@ import 'login_screen.dart';  // A dónde ir si NO hay sesión
 import 'client_home_screen.dart';
 import 'map_screen.dart';
 import 'barber_home_screen.dart';
+import 'admin_home_screen.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -51,12 +52,11 @@ class _SplashScreenState extends State<SplashScreen> {
     Navigator.of(context).pushReplacement(
       MaterialPageRoute(builder: (context) => const BarberHomeScreen()), // <-- VA A BARBER HOME
     );
-  } else if (userRol == 'admin') {
-    // 4. Es Admin -> TODO: Pantalla Admin (FASE 5)
-     Navigator.of(context).pushReplacement(
-       MaterialPageRoute(builder: (context) => const ClientHomeScreen()), // Temporal
-     );
-  } else {
+  } else if (userRol == 'admin') { // <-- ¡AQUÍ!
+   // 4. Es Admin -> Navegar a AdminHomeScreen
+    Navigator.of(context).pushReplacement(
+     MaterialPageRoute(builder: (context) => const AdminHomeScreen()), // <-- CORREGIDO
+   );
     // 5. Rol desconocido -> Login
      Navigator.of(context).pushReplacement(
        MaterialPageRoute(builder: (context) => const LoginScreen()),
