@@ -5,9 +5,9 @@ import 'dart:convert';
 import 'package:intl/intl.dart';
 import 'package:collection/collection.dart'; // Para groupBy
 
-// Asegúrate que la ruta sea correcta
 import 'cita_model.dart';
-import 'login_screen.dart';       // Para cerrar sesión
+import 'login_screen.dart';
+import 'barber_history_screen.dart'; // Para navegar al historial
 
 class BarberHomeScreen extends StatefulWidget {
   const BarberHomeScreen({super.key});
@@ -20,32 +20,38 @@ class _BarberHomeScreenState extends State<BarberHomeScreen> {
   String _barberName = '';
   int? _barberId;
 
-  // Estados para las citas de la SEMANA
-  List<CitaModel> _citasSemana = []; // <-- Renombrado
+  List<CitaModel> _citasSemana = [];
   bool _isLoadingCitas = true;
   String? _citasError;
 
-  // Formateadores de fecha/hora
-  final DateFormat _headerDateFormat = DateFormat('EEEE d MMM y', 'es_ES'); // Para encabezados de día
-  final DateFormat _timeFormat = DateFormat('h:mm a', 'es_ES');       // Para la hora de la cita
+  final DateFormat _headerDateFormat = DateFormat('EEEE d MMM y', 'es_ES');
+  final DateFormat _timeFormat = DateFormat('h:mm a', 'es_ES');
+  
+  // Controlador para el motivo de cancelación
+  final TextEditingController _cancelReasonController = TextEditingController();
 
   @override
   void initState() {
     super.initState();
     _loadBarberDataAndFetchCitas();
   }
+  
+  @override
+  void dispose() {
+    // Limpiamos el controlador
+    _cancelReasonController.dispose();
+    super.dispose();
+  }
 
   Future<void> _loadBarberDataAndFetchCitas() async {
     final prefs = await SharedPreferences.getInstance();
-    _barberId = prefs.getInt('user_id'); // El ID del barbero logueado
+    _barberId = prefs.getInt('user_id');
     if (!mounted) return;
     setState(() {
       _barberName = prefs.getString('user_nombre') ?? 'Barbero';
-      // No necesitamos el nombre de la barbería aquí, pero podríamos cargarlo si quisiéramos
     });
-
     if (_barberId != null) {
-      await _fetchCitasSemana(); // <-- Llamamos a la nueva función
+      await _fetchCitasSemana();
     } else {
       if (!mounted) return;
       setState(() {
@@ -55,10 +61,8 @@ class _BarberHomeScreenState extends State<BarberHomeScreen> {
     }
   }
 
-  // --- FUNCIÓN ACTUALIZADA PARA OBTENER CITAS DE LA SEMANA ---
-  Future<void> _fetchCitasSemana() async { // <-- Renombrado
-    if (_barberId == null) return;
-
+  Future<void> _fetchCitasSemana() async {
+     if (_barberId == null) return;
     if (!mounted) return;
     // Mostrar indicador solo si la lista está vacía o hubo error previo
     if (_citasSemana.isEmpty || _citasError != null) {
@@ -67,23 +71,15 @@ class _BarberHomeScreenState extends State<BarberHomeScreen> {
         _citasError = null;
         });
     }
-
-    // ¡NUEVO ENDPOINT!
-    // Usa 10.0.2.2 si es emulador Android, localhost o 127.0.0.1 para web/físico
     final String apiUrl = "http://127.0.0.1:8000/barberos/$_barberId/citas/semana";
-
     try {
       final response = await http.get(Uri.parse(apiUrl)).timeout(const Duration(seconds: 15));
-
       if (!mounted) return;
-
       if (response.statusCode == 200) {
         final List<dynamic> citasJson = json.decode(utf8.decode(response.bodyBytes));
         if (!mounted) return;
         setState(() {
-          _citasSemana = citasJson // <-- Guardamos en la nueva lista
-              .map((json) => CitaModel.fromJson(json))
-              .toList();
+          _citasSemana = citasJson.map((json) => CitaModel.fromJson(json)).toList();
           _isLoadingCitas = false;
           _citasError = null;
         });
@@ -104,7 +100,180 @@ class _BarberHomeScreenState extends State<BarberHomeScreen> {
       print("Fetch Citas Semana Error: $e");
     }
   }
-  // --- FIN FUNCIÓN ACTUALIZADA ---
+
+  // --- FUNCIÓN PARA MARCAR CITA COMPLETADA ---
+  Future<void> _marcarCitaCompletada(int citaId) async {
+    final String apiUrl = "http://127.0.0.1:8000/citas/$citaId/completar";
+    
+    try {
+      final response = await http.put(
+        Uri.parse(apiUrl),
+        headers: {'Content-Type': 'application/json; charset=UTF-8'},
+      ).timeout(const Duration(seconds: 10));
+
+      if (!mounted) return;
+
+      if (response.statusCode == 200) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Cita marcada como completada.'), backgroundColor: Colors.green),
+        );
+        _fetchCitasSemana(); // Refresca la lista (la cita desaparecerá de aquí)
+      } else {
+        final Map<String, dynamic> responseData = json.decode(response.body);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: ${responseData['detail'] ?? 'Error desconocido'}')),
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Error de conexión al completar la cita.')),
+      );
+    }
+  }
+
+  // --- FUNCIÓN PARA CANCELAR CITA (BARBERO) CON MOTIVO ---
+  Future<void> _cancelarCitaBarbero(int citaId) async {
+    // 1. Limpiar el controlador del diálogo anterior
+    _cancelReasonController.clear();
+
+    // 2. Preguntar por el motivo
+    final String? motivo = await showDialog<String>(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('Cancelar Cita'),
+          content: TextField(
+            controller: _cancelReasonController,
+            decoration: const InputDecoration(
+              hintText: "Motivo de la cancelación (ej. cliente no asistió)",
+            ),
+            autofocus: true,
+          ),
+          actions: [
+            TextButton(
+              child: const Text('Cerrar'),
+              onPressed: () => Navigator.of(context).pop(), // Cierra sin devolver nada
+            ),
+            TextButton(
+              child: const Text('Confirmar Cancelación'),
+              style: TextButton.styleFrom(foregroundColor: Colors.redAccent),
+              onPressed: () {
+                // Validación simple para que el motivo no esté vacío
+                if (_cancelReasonController.text.trim().length < 5) {
+                   // Opcional: mostrar un mini error dentro del diálogo
+                   print("El motivo debe tener al menos 5 caracteres");
+                   // Podríamos añadir un validador visual aquí
+                } else {
+                  Navigator.of(context).pop(_cancelReasonController.text); // Devuelve el motivo
+                }
+              },
+            ),
+          ],
+        );
+      },
+    );
+
+    // 3. Si el usuario no escribió un motivo o cerró el diálogo, no hacemos nada
+    if (motivo == null || motivo.trim().isEmpty || !mounted) {
+      return;
+    }
+
+    // 4. Si hay motivo, llamar a la API
+    final String apiUrl = "http://127.0.0.1:8000/barberos/citas/$citaId/cancelar";
+
+    try {
+      final response = await http.put(
+        Uri.parse(apiUrl),
+        headers: {'Content-Type': 'application/json; charset=UTF-8'},
+        body: json.encode({'motivo': motivo}), // <-- Enviamos el motivo
+      ).timeout(const Duration(seconds: 10));
+
+      if (!mounted) return;
+
+      if (response.statusCode == 200) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Cita cancelada por el barbero.'), backgroundColor: Colors.orange),
+        );
+        _fetchCitasSemana(); // Refresca la lista
+      } else {
+        final Map<String, dynamic> responseData = json.decode(response.body);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: ${responseData['detail'] ?? 'Error desconocido'}')),
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Error de conexión al cancelar la cita.')),
+      );
+    }
+  }
+
+
+  // --- FUNCIÓN PARA MOSTRAR OPCIONES DE CITA ---
+  void _mostrarAccionesCita(CitaModel cita) {
+    // Solo muestra opciones si la cita está 'pendiente' o 'confirmada'
+    if (cita.estado != 'pendiente' && cita.estado != 'confirmada') {
+       if (mounted) {
+         ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Esta cita ya está ${cita.estado}.')),
+        );
+       }
+      return;
+    }
+
+    showModalBottomSheet(
+      context: context,
+      builder: (BuildContext context) {
+        return SafeArea(
+          child: Wrap(
+            children: <Widget>[
+              // Título del Modal (Cliente y Servicio)
+               ListTile(
+                title: Text(cita.cliente.nombre, style: const TextStyle(fontWeight: FontWeight.bold)),
+                subtitle: Text(cita.servicioAgendado.servicio.nombre),
+                trailing: Chip(
+                   label: Text(cita.estado, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500)),
+                   backgroundColor: _getStatusColor(cita.estado).withOpacity(0.2),
+                   labelStyle: TextStyle(color: _getStatusColor(cita.estado)),
+                ),
+              ),
+               const Divider(height: 1),
+              // Opción 1: Marcar como Completada
+              ListTile(
+                leading: const Icon(Icons.check_circle, color: Colors.green),
+                title: const Text('Marcar como Completada'),
+                onTap: () {
+                  Navigator.of(context).pop(); // Cierra el modal
+                  _marcarCitaCompletada(cita.id); // Llama a la función
+                },
+              ),
+              // Opción 2: Marcar como No Asistió / Cancelar
+              ListTile(
+                leading: const Icon(Icons.cancel, color: Colors.redAccent),
+                title: const Text('Marcar como No Asistió / Cancelar'),
+                onTap: () {
+                  Navigator.of(context).pop(); // Cierra el modal
+                  _cancelarCitaBarbero(cita.id); // Llama a la función con motivo
+                },
+              ),
+              // Opción 3: Cerrar
+              ListTile(
+                leading: const Icon(Icons.close),
+                title: const Text('Cerrar'),
+                onTap: () {
+                  Navigator.of(context).pop(); // Solo cierra el modal
+                },
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+  // --- FIN NUEVAS FUNCIONES ---
+
 
   // --- Funciones de Navegación ---
   Future<void> _logout() async {
@@ -116,102 +285,94 @@ class _BarberHomeScreenState extends State<BarberHomeScreen> {
        );
      }
    }
-
-   void _goToHistorialBarbero() {
-     // TODO: Navegar a la pantalla de historial del barbero (FASE 4)
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Pantalla "Historial Barbero" aún no implementada.')),
-        );
-      }
+  void _goToHistorialBarbero() {
+     Navigator.of(context).push(
+       MaterialPageRoute(builder: (context) => const BarberHistoryScreen()),
+     );
    }
-
-   void _goToDisponibilidad() {
-      // TODO: Navegar a la pantalla de disponibilidad (FASE 4)
-       if (mounted) {
-         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Pantalla "Disponibilidad" aún no implementada.')),
-        );
-       }
+  void _goToDisponibilidad() {
+     if (mounted) {
+       ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Pantalla "Disponibilidad" aún no implementada.')),
+      );
+     }
    }
+  // --- FIN Funciones de Navegación ---
 
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('Agenda Semanal - $_barberName'), // Título cambiado
+        title: Text('Agenda Semanal - $_barberName'),
         actions: [
-           IconButton( // Botón Logout añadido aquí
+          IconButton(
             icon: const Icon(Icons.logout),
             tooltip: 'Cerrar Sesión',
-            onPressed: _logout,
+            onPressed: _logout, // Llama a la función
           ),
         ],
       ),
       body: Column(
         children: [
-          // --- Lista de Citas de la Semana ---
           Expanded(
-            child: _buildCitasSemanaList(), // <-- Llamamos a la nueva función de build
+            child: _buildCitasSemanaList(),
           ),
-          // --- Botones de Acción para Barbero ---
           Padding(
             padding: const EdgeInsets.all(16.0),
             child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly, // Espaciado entre botones
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
               children: [
                 ElevatedButton.icon(
                   icon: const Icon(Icons.calendar_today_outlined),
                   label: const Text('Disponibilidad'),
-                  onPressed: _goToDisponibilidad,
-                  // Estilo puede venir del tema global en main.dart
+                  onPressed: _goToDisponibilidad, // Llama a la función
                 ),
                 OutlinedButton.icon(
                   icon: const Icon(Icons.history),
                   label: const Text('Mi Historial'),
-                  onPressed: _goToHistorialBarbero,
-                   // Estilo puede venir del tema global en main.dart
+                  onPressed: _goToHistorialBarbero, // Llama a la función
                 ),
               ],
-             ),
+            ),
           ),
         ],
       ),
     );
   }
 
-  // --- WIDGET HELPER ACTUALIZADO PARA MOSTRAR LA LISTA AGRUPADA POR DÍA ---
-  Widget _buildCitasSemanaList() { // <-- Renombrado
+  // --- WIDGET HELPER (ACTUALIZADO CON onTap) ---
+  Widget _buildCitasSemanaList() {
     // Estado de carga inicial
     if (_isLoadingCitas && _citasSemana.isEmpty && _citasError == null) {
       return const Center(child: CircularProgressIndicator());
     }
+    
     // Estado de error inicial
-    if (_citasError != null && _citasSemana.isEmpty) {
-      return Center(
-           child: Column(
-             mainAxisAlignment: MainAxisAlignment.center,
-             children: [
-               Text(_citasError!, textAlign: TextAlign.center, style: TextStyle(color: Colors.red[300])),
-               const SizedBox(height: 10),
-               ElevatedButton(
-                 onPressed: _fetchCitasSemana, // Llama a la función correcta
-                 child: const Text('Reintentar'),
-               )
-             ],
-           ),
-         );
-    }
+    if (_citasError != null && _citasSemana.isEmpty) { 
+       return Center(
+         child: Column(
+           mainAxisAlignment: MainAxisAlignment.center,
+           children: [
+             Text(_citasError!, textAlign: TextAlign.center, style: TextStyle(color: Colors.red[300])),
+             const SizedBox(height: 10),
+             ElevatedButton(
+               onPressed: _fetchCitasSemana,
+               child: const Text('Reintentar'),
+             )
+           ],
+         ),
+       );
+     }
      // Estado vacío después de cargar
-    if (_citasSemana.isEmpty && !_isLoadingCitas) {
+    if (_citasSemana.isEmpty && !_isLoadingCitas) { 
        return RefreshIndicator(
-         onRefresh: _fetchCitasSemana, // Llama a la función correcta
-         child: LayoutBuilder( // Necesario para que RefreshIndicator funcione con lista vacía
+         onRefresh: _fetchCitasSemana,
+         child: LayoutBuilder(
               builder: (context, constraints) => SingleChildScrollView(
-                physics: const AlwaysScrollableScrollPhysics(), // Permite scroll para refrescar
+                physics: const AlwaysScrollableScrollPhysics(),
                 child: ConstrainedBox(
-                  constraints: BoxConstraints(minHeight: constraints.maxHeight), // Ocupa toda la altura
+                  constraints: BoxConstraints(minHeight: constraints.maxHeight),
                   child: Center(
                     child: Padding(
                       padding: const EdgeInsets.all(16.0),
@@ -226,35 +387,28 @@ class _BarberHomeScreenState extends State<BarberHomeScreen> {
               ),
             ),
        );
-    }
+     }
 
     // --- LÓGICA DE AGRUPACIÓN ---
-    // Agrupamos las citas por día (ignorando la hora)
     final Map<DateTime, List<CitaModel>> citasAgrupadas = groupBy(
       _citasSemana,
-      // Usamos toLocal() para agrupar por fecha local, no UTC
       (CitaModel cita) {
           final localDate = cita.fechaHora.toLocal();
           return DateTime(localDate.year, localDate.month, localDate.day);
       }
     );
-    // Ordenamos los días
     final List<DateTime> diasOrdenados = citasAgrupadas.keys.toList()..sort();
     // --- FIN LÓGICA DE AGRUPACIÓN ---
 
-    // Mostramos la lista agrupada
     return RefreshIndicator(
-       onRefresh: _fetchCitasSemana, // Llama a la función correcta
+       onRefresh: _fetchCitasSemana,
        child: ListView.builder(
-         padding: const EdgeInsets.all(8.0), // Padding exterior
-        // La cantidad de items ahora es la cantidad de DÍAS con citas
+        padding: const EdgeInsets.all(8.0),
         itemCount: diasOrdenados.length,
         itemBuilder: (context, indexDia) {
           final dia = diasOrdenados[indexDia];
-          // Ordenamos las citas de ese día por hora
           final citasDelDia = citasAgrupadas[dia]!..sort((a, b) => a.fechaHora.compareTo(b.fechaHora));
 
-          // Creamos una columna para cada día
           return Padding(
             padding: const EdgeInsets.only(bottom: 16.0),
             child: Column(
@@ -262,46 +416,41 @@ class _BarberHomeScreenState extends State<BarberHomeScreen> {
               children: [
                 // Encabezado del Día
                 Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 8.0),
-                  child: Text(
-                    // Formateamos usando la fecha local
-                    _headerDateFormat.format(dia.toLocal()),
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.blueAccent[100]),
-                  ),
-                ),
-                // Lista de Citas para ese Día
+                   padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 8.0),
+                   child: Text(
+                     _headerDateFormat.format(dia.toLocal()),
+                     style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.blueAccent[100]),
+                   ),
+                 ),
+                 // Lista de Citas para ese Día
                 ListView.builder(
-                  shrinkWrap: true, // Para que funcione dentro de la Column
-                  physics: const NeverScrollableScrollPhysics(), // Deshabilita scroll interno
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
                   itemCount: citasDelDia.length,
                   itemBuilder: (context, indexCita) {
                     final cita = citasDelDia[indexCita];
-                    // Formateamos la hora usando toLocal()
                     final horaFormateada = _timeFormat.format(cita.fechaHora.toLocal());
 
                     return Card(
-                       margin: const EdgeInsets.symmetric(vertical: 4.0, horizontal: 8.0),
-                       color: Colors.grey[850],
-                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      margin: const EdgeInsets.symmetric(vertical: 4.0, horizontal: 8.0),
+                      color: Colors.grey[850],
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                       child: ListTile(
-                         // Mostramos la inicial del CLIENTE
                         leading: CircleAvatar(
-                            backgroundColor: Theme.of(context).colorScheme.secondaryContainer,
+                           backgroundColor: Theme.of(context).colorScheme.secondaryContainer,
                             child: Text(
                                 cita.cliente.nombre.isNotEmpty ? cita.cliente.nombre.substring(0, 1).toUpperCase() : '?',
                                 style: TextStyle(color: Theme.of(context).colorScheme.onSecondaryContainer, fontWeight: FontWeight.bold)
                             ),
-                        ),
+                         ),
                         title: Text(
-                          cita.servicioAgendado.servicio.nombre, // Servicio
-                          style: const TextStyle(fontWeight: FontWeight.bold),
-                        ),
-                        // Subtítulo: Hora y Nombre del Cliente
+                           cita.servicioAgendado.servicio.nombre,
+                           style: const TextStyle(fontWeight: FontWeight.bold),
+                         ),
                         subtitle: Text(
-                          '$horaFormateada - ${cita.cliente.nombre}', // Hora local formateada
-                          style: TextStyle(color: Colors.grey[400]),
-                        ),
-                         // Estado de la cita
+                           '$horaFormateada - ${cita.cliente.nombre}',
+                           style: TextStyle(color: Colors.grey[400]),
+                         ),
                         trailing: Chip(
                            label: Text(cita.estado, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500)),
                            backgroundColor: _getStatusColor(cita.estado).withOpacity(0.2),
@@ -310,15 +459,13 @@ class _BarberHomeScreenState extends State<BarberHomeScreen> {
                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
                            side: BorderSide.none,
                          ),
+                        
+                        // --- ¡onTap ACTUALIZADO! ---
                         onTap: () {
-                          // TODO: Ir a detalles de la cita (marcar como completada?)
-                           print('Tapped cita barbero ID: ${cita.id}');
-                           if (mounted) {
-                             ScaffoldMessenger.of(context).showSnackBar(
-                               SnackBar(content: Text('Acciones para cita ${cita.id} aún no implementadas.')),
-                             );
-                           }
+                          // Llama a la función que muestra el modal de acciones
+                          _mostrarAccionesCita(cita); 
                         },
+                        // --- FIN onTap ACTUALIZADO ---
                       ),
                     );
                   },
@@ -330,9 +477,9 @@ class _BarberHomeScreenState extends State<BarberHomeScreen> {
       ),
     );
   }
-   // --- FIN WIDGET HELPER ACTUALIZADO ---
+   // --- FIN WIDGET HELPER ---
 
-   // Helper para color de estado (igual que en ClientHomeScreen)
+   // Helper para color de estado
    Color _getStatusColor(String status) {
      switch (status.toLowerCase()) {
        case 'pendiente': return Colors.orangeAccent;
@@ -343,6 +490,3 @@ class _BarberHomeScreenState extends State<BarberHomeScreen> {
      }
    }
 }
-
-
-
