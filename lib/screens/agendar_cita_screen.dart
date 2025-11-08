@@ -17,7 +17,7 @@ class AgendarCitaScreen extends StatefulWidget {
 class _AgendarCitaScreenState extends State<AgendarCitaScreen> {
   // Estados para guardar selecciones
   DateTime? _selectedDate;
-  TimeOfDay? _selectedTime; // Podríamos necesitar algo más complejo para la hora
+  TimeOfDay? _selectedTime;
   UsuarioSimple? _selectedBarbero;
   BarberiaServicioSimple? _selectedServicio;
 
@@ -26,37 +26,42 @@ class _AgendarCitaScreenState extends State<AgendarCitaScreen> {
   List<BarberiaServicioSimple> _servicios = [];
   bool _isLoadingData = true;
   String? _errorData;
-  int? _barberiaId; // ID de la barbería actual del cliente
+  int? _barberiaId;
 
-  // Estado para el botón de confirmar
   bool _isConfirming = false;
 
   final DateFormat _dateFormat = DateFormat('EEEE d MMM y', 'es_ES');
-  final TimeFormat = DateFormat('h:mm a', 'es_ES'); // Corrección: TimeFormat debe ser una instancia de DateFormat
+  // Ya no necesitamos _timeFormat aquí, lo usaremos en la función helper
 
   @override
   void initState() {
     super.initState();
-    _loadInitialData(); // Carga barberiaId y luego los datos
+    _loadInitialData();
   }
 
-  // Carga el ID de la barbería y luego los barberos/servicios
+  // --- ¡NUEVA FUNCIÓN HELPER PARA FORZAR AM/PM! ---
+  String _formatTimeOfDay(TimeOfDay tod) {
+    final now = DateTime.now();
+    // Creamos un DateTime temporal (con fecha de hoy) solo para poder usar el formateador intl
+    final dt = DateTime(now.year, now.month, now.day, tod.hour, tod.minute);
+    // Usamos el formateador 'h:mm a' (que incluye am/pm)
+    return DateFormat('h:mm a', 'es_ES').format(dt);
+  }
+  // --- FIN FUNCIÓN HELPER ---
+
   Future<void> _loadInitialData() async {
     final prefs = await SharedPreferences.getInstance();
-    // Leemos el ID como String y lo convertimos a int si no es 'null'
     final String? barberiaIdString = prefs.getString('barberia_id');
     if (barberiaIdString != null && barberiaIdString != 'null') {
       _barberiaId = int.tryParse(barberiaIdString);
     }
 
     if (_barberiaId != null) {
-      // Usamos Future.wait para lanzar ambas llamadas a la API en paralelo
       await Future.wait([
         _fetchBarberos(),
         _fetchServicios(),
       ]);
     } else {
-      // Si no hay barberiaId, mostramos un error
        if (!mounted) return;
       setState(() {
         _errorData = "No se pudo identificar tu barbería.";
@@ -64,13 +69,11 @@ class _AgendarCitaScreenState extends State<AgendarCitaScreen> {
       });
     }
      if (!mounted) return;
-     // Marcamos como terminado aunque haya habido error en fetch
      setState(() {
          _isLoadingData = false;
      });
   }
 
-  // --- Funciones para llamar a la API ---
   Future<void> _fetchBarberos() async {
     if (_barberiaId == null) return;
     final String apiUrl = "http://127.0.0.1:8000/barberias/$_barberiaId/barberos";
@@ -119,36 +122,31 @@ class _AgendarCitaScreenState extends State<AgendarCitaScreen> {
     }
   }
 
-  // --- Funciones para mostrar selectores ---
   Future<void> _selectDate(BuildContext context) async {
     final DateTime? picked = await showDatePicker(
       context: context,
       initialDate: _selectedDate ?? DateTime.now(),
-      firstDate: DateTime.now(), // No permitir fechas pasadas
-      lastDate: DateTime.now().add(const Duration(days: 90)), // Permitir agendar hasta 90 días
-      locale: const Locale('es', 'ES'), // Asegura que el calendario esté en español
+      firstDate: DateTime.now(),
+      lastDate: DateTime.now().add(const Duration(days: 90)),
+      locale: const Locale('es', 'ES'),
     );
     if (picked != null && picked != _selectedDate) {
       setState(() {
         _selectedDate = picked;
-        _selectedTime = null; // Reiniciar hora al cambiar fecha (lógica de disponibilidad pendiente)
+        _selectedTime = null;
       });
-      // TODO: Aquí deberíamos llamar a una API para obtener horarios disponibles para esta fecha/barbero
     }
   }
 
    Future<void> _selectTime(BuildContext context) async {
-    // --- IMPLEMENTACIÓN BÁSICA ---
-    // Muestra un selector de hora simple.
-    // TODO: Reemplazar esto con lógica real de disponibilidad basada en _selectedDate y _selectedBarbero
      final TimeOfDay? picked = await showTimePicker(
        context: context,
        initialTime: _selectedTime ?? TimeOfDay.now(),
-       builder: (context, child) { // Opcional: Aplicar tema oscuro al picker
+       builder: (context, child) {
          return Theme(
            data: ThemeData.dark().copyWith(
              colorScheme: const ColorScheme.dark(
-               primary: Colors.blueAccent, // Color de acento
+               primary: Colors.blueAccent,
              ),
            ),
            child: child!,
@@ -162,38 +160,42 @@ class _AgendarCitaScreenState extends State<AgendarCitaScreen> {
      }
   }
 
-
-  // --- Función para confirmar la cita ---
   Future<void> _confirmarCita() async {
-    // Validaciones básicas
     if (_selectedDate == null || _selectedTime == null || _selectedBarbero == null || _selectedServicio == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Por favor, selecciona fecha, hora, barbero y servicio.')),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Por favor, selecciona fecha, hora, barbero y servicio.')),
+        );
+      }
       return;
     }
 
+    if (!mounted) return;
     setState(() => _isConfirming = true);
 
     final prefs = await SharedPreferences.getInstance();
     final int? clienteId = prefs.getInt('user_id');
 
     if (clienteId == null) {
-       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Error: No se pudo identificar al cliente.')),
-      );
+       if (mounted) {
+         ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Error: No se pudo identificar al cliente.')),
+        );
+       }
       setState(() => _isConfirming = false);
       return;
     }
 
-    // Combinamos fecha y hora
-    final DateTime fechaHoraCita = DateTime(
+    // --- LÓGICA CON CONVERSIÓN A UTC ---
+    final DateTime fechaHoraLocal = DateTime(
       _selectedDate!.year,
       _selectedDate!.month,
       _selectedDate!.day,
       _selectedTime!.hour,
       _selectedTime!.minute,
     );
+    final DateTime fechaHoraCita = fechaHoraLocal.toUtc();
+    // --- FIN LÓGICA UTC ---
 
     final String apiUrl = "http://127.0.0.1:8000/citas";
 
@@ -202,41 +204,36 @@ class _AgendarCitaScreenState extends State<AgendarCitaScreen> {
         Uri.parse(apiUrl),
         headers: {'Content-Type': 'application/json; charset=UTF-8'},
         body: json.encode({
-          'fecha_hora': fechaHoraCita.toIso8601String(), // Enviar en formato ISO
+          'fecha_hora': fechaHoraCita.toIso8601String(), // Enviamos en UTC
           'cliente_id': clienteId,
           'barbero_id': _selectedBarbero!.id,
           'barberia_id': _barberiaId!,
           'barberia_servicio_id': _selectedServicio!.id,
-          // 'estado' se pone por defecto en el backend
         }),
       );
 
        if (!mounted) return;
 
       if (response.statusCode == 201) {
-        // ¡Éxito!
          ScaffoldMessenger.of(context).showSnackBar(
            const SnackBar(content: Text('¡Cita agendada con éxito!'), backgroundColor: Colors.green),
          );
          // Regresamos a la pantalla anterior (ClientHomeScreen)
-         Navigator.of(context).pop();
+         // Pasamos 'true' para indicar que se refresque la lista
+         Navigator.of(context).pop(true);
 
       } else {
-        // Error de la API
         final Map<String, dynamic> responseData = json.decode(response.body);
          ScaffoldMessenger.of(context).showSnackBar(
            SnackBar(content: Text('Error al agendar: ${responseData['detail'] ?? 'Error desconocido'}')),
          );
       }
-
     } catch(e) {
-      // Error de conexión
        if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
          const SnackBar(content: Text('Error de conexión al agendar la cita.')),
        );
     }
-
 
     if (mounted) {
        setState(() => _isConfirming = false);
@@ -254,10 +251,10 @@ class _AgendarCitaScreenState extends State<AgendarCitaScreen> {
           ? const Center(child: CircularProgressIndicator())
           : _errorData != null
               ? Center(child: Text(_errorData!, style: TextStyle(color: Colors.red[300])))
-              : SingleChildScrollView( // Permite scroll si el contenido es largo
+              : SingleChildScrollView(
                   padding: const EdgeInsets.all(20.0),
                   child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch, // Estira los elementos
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       // --- Selector de Fecha ---
                       ListTile(
@@ -276,17 +273,16 @@ class _AgendarCitaScreenState extends State<AgendarCitaScreen> {
                       ),
                       const SizedBox(height: 20),
 
-                      // --- Selector de Hora (Básico) ---
+                      // --- Selector de Hora (CORREGIDO) ---
                        ListTile(
                         leading: const Icon(Icons.access_time),
                         title: Text(
                           _selectedTime == null
                               ? 'Seleccionar Hora'
-                              // Usamos MaterialLocalizations para formatear TimeOfDay
-                              : MaterialLocalizations.of(context).formatTimeOfDay(_selectedTime!, alwaysUse24HourFormat: false),
+                              // ¡LÓGICA CORREGIDA para forzar a.m./p.m.!
+                              : _formatTimeOfDay(_selectedTime!),
                         ),
                         trailing: const Icon(Icons.chevron_right),
-                         // Solo habilita si ya se seleccionó fecha
                         enabled: _selectedDate != null,
                         onTap: _selectedDate == null ? null : () => _selectTime(context),
                          shape: RoundedRectangleBorder(
@@ -295,7 +291,6 @@ class _AgendarCitaScreenState extends State<AgendarCitaScreen> {
                         ),
                       ),
                       const SizedBox(height: 20),
-
 
                       // --- Selector de Barbero ---
                       DropdownButtonFormField<UsuarioSimple>(
@@ -315,11 +310,10 @@ class _AgendarCitaScreenState extends State<AgendarCitaScreen> {
                         onChanged: (UsuarioSimple? newValue) {
                           setState(() {
                             _selectedBarbero = newValue;
-                             _selectedTime = null; // Reiniciar hora al cambiar barbero (lógica pendiente)
+                             _selectedTime = null;
                           });
-                           // TODO: Aquí deberíamos llamar a API de disponibilidad si _selectedDate existe
                         },
-                        validator: (value) => value == null ? 'Campo requerido' : null,
+                         validator: (value) => value == null ? 'Campo requerido' : null,
                       ),
                       const SizedBox(height: 20),
 
@@ -335,7 +329,6 @@ class _AgendarCitaScreenState extends State<AgendarCitaScreen> {
                         items: _servicios.map((servicioOferta) {
                           return DropdownMenuItem<BarberiaServicioSimple>(
                             value: servicioOferta,
-                            // Muestra nombre y precio
                             child: Text('${servicioOferta.servicio.nombre} (\$${servicioOferta.precio.toStringAsFixed(2)})'),
                           );
                         }).toList(),

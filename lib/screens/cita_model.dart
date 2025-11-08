@@ -60,18 +60,17 @@ class BarberiaServicioSimple {
  factory BarberiaServicioSimple.fromJson(Map<String, dynamic> json) {
    return BarberiaServicioSimple(
      id: json['id'] ?? 0,
-     precio: (json['precio'] as num?)?.toDouble() ?? 0.0, // Conversión segura a double
+     precio: (json['precio'] as num?)?.toDouble() ?? 0.0,
      activo: json['activo'] ?? false,
      barberiaId: json['barberia_id'] ?? 0,
      servicioId: json['servicio_id'] ?? 0,
-     // Parseamos el objeto 'servicio' anidado
      servicio: ServicioSimple.fromJson(json['servicio'] ?? {}),
    );
  }
 }
 
 
-// Clase principal para la Cita
+// --- Clase principal para la Cita (ACTUALIZADA) ---
 class CitaModel {
   final int id;
   final DateTime fechaHora;
@@ -80,9 +79,10 @@ class CitaModel {
   final int barberiaId;
   final int barberiaServicioId;
   final String estado;
-  final UsuarioSimple cliente; // Objeto Usuario anidado
-  final UsuarioSimple barbero; // Objeto Usuario anidado
-  final BarberiaServicioSimple servicioAgendado; // Objeto BarberiaServicio anidado
+  final String? cancelacion_motivo; // <-- ¡CAMPO AÑADIDO!
+  final UsuarioSimple cliente;
+  final UsuarioSimple barbero;
+  final BarberiaServicioSimple servicioAgendado;
 
   CitaModel({
     required this.id,
@@ -92,6 +92,7 @@ class CitaModel {
     required this.barberiaId,
     required this.barberiaServicioId,
     required this.estado,
+    this.cancelacion_motivo, // <-- ¡CAMPO AÑADIDO!
     required this.cliente,
     required this.barbero,
     required this.servicioAgendado,
@@ -100,14 +101,13 @@ class CitaModel {
   factory CitaModel.fromJson(Map<String, dynamic> json) {
     return CitaModel(
       id: json['id'] ?? 0,
-      // Parseamos la fecha ISO 8601 que viene de la API
       fechaHora: DateTime.tryParse(json['fecha_hora'] ?? '') ?? DateTime.now(),
       clienteId: json['cliente_id'] ?? 0,
       barberoId: json['barbero_id'] ?? 0,
       barberiaId: json['barberia_id'] ?? 0,
       barberiaServicioId: json['barberia_servicio_id'] ?? 0,
       estado: json['estado'] ?? 'desconocido',
-      // Parseamos los objetos anidados
+      cancelacion_motivo: json['cancelacion_motivo'], // <-- ¡CAMPO AÑADIDO!
       cliente: UsuarioSimple.fromJson(json['cliente'] ?? {}),
       barbero: UsuarioSimple.fromJson(json['barbero'] ?? {}),
       servicioAgendado: BarberiaServicioSimple.fromJson(json['servicio_agendado'] ?? {}),
