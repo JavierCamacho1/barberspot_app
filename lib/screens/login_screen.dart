@@ -8,6 +8,7 @@ import 'map_screen.dart'; // Pantalla del mapa
 // --- ¡IMPORTACIONES PARA ROLES Y RESET! ---
 import 'request_reset_screen.dart'; // Pantalla para solicitar reseteo
 import 'barber_home_screen.dart'; // <-- Pantalla principal del barbero
+import 'admin_home_screen.dart';
 // --- FIN IMPORTACIONES ---
 
 class LoginScreen extends StatefulWidget {
@@ -88,11 +89,10 @@ class _LoginScreenState extends State<LoginScreen> {
               MaterialPageRoute(builder: (context) => const BarberHomeScreen()), // <-- VA A BARBER HOME
            );
         } else if (userRol == 'admin') {
-           // TODO: Redirigir a pantalla Admin (FASE 5)
-           Navigator.of(context).pushReplacement(
-              MaterialPageRoute(builder: (context) => const ClientHomeScreen()), // Temporal
-           );
-        } else {
+       Navigator.of(context).pushReplacement(
+          MaterialPageRoute(builder: (context) => const AdminHomeScreen()), // <-- CORREGIDO
+       );
+    } else {
            // Rol desconocido -> Login
             Navigator.of(context).pushReplacement(
              MaterialPageRoute(builder: (context) => const LoginScreen()),
