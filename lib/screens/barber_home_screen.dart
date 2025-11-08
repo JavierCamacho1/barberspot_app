@@ -8,6 +8,7 @@ import 'package:collection/collection.dart'; // Para groupBy
 import 'cita_model.dart';
 import 'login_screen.dart';
 import 'barber_history_screen.dart'; // Para navegar al historial
+import 'availability_screen.dart';
 
 class BarberHomeScreen extends StatefulWidget {
   const BarberHomeScreen({super.key});
@@ -291,12 +292,13 @@ class _BarberHomeScreenState extends State<BarberHomeScreen> {
      );
    }
   void _goToDisponibilidad() {
-     if (mounted) {
-       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Pantalla "Disponibilidad" aún no implementada.')),
-      );
-     }
-   }
+  // ¡NAVEGACIÓN REAL!
+  Navigator.of(context).push(
+    MaterialPageRoute(builder: (context) => const AvailabilityScreen()),
+  ).then((_) {
+    // Opcional: Refrescar algo si volvemos? Por ahora no es necesario.
+  });
+}
   // --- FIN Funciones de Navegación ---
 
 
