@@ -1,3 +1,6 @@
+// Importa este nuevo paquete para el efecto de desenfoque
+import 'dart:ui';
+
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
@@ -16,25 +19,27 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final TextEditingController _passwordController = TextEditingController();
 
   bool _isLoading = false;
+  
+  // --- ¡NUEVO! Variable de estado para ver/ocultar contraseña ---
+  bool _isPasswordObscured = true;
 
+  // --- LÓGICA DE REGISTRO (Sin cambios) ---
   Future<void> _register() async {
-    // Validar que los campos no estén vacíos
     if (_nombreController.text.isEmpty ||
         _telefonoController.text.isEmpty ||
         _passwordController.text.isEmpty) {
-      print("Error: Todos los campos son obligatorios.");
-      // Opcional: Mostrar un SnackBar de error
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Error: Todos los campos son obligatorios.')),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Error: Todos los campos son obligatorios.')),
+        );
+      }
       return;
     }
 
-    setState(() {
-      _isLoading = true;
-    });
+    if (!mounted) return;
+    setState(() { _isLoading = true; });
 
-    final String apiUrl = "http://localhost:8000/registro";
+    final String apiUrl = "http://127.0.0.1:8000/registro";
 
     try {
       final response = await http.post(
@@ -49,20 +54,15 @@ class _RegisterScreenState extends State<RegisterScreen> {
         }),
       );
 
-      // Decodificamos la respuesta JSON
+      if (!mounted) return;
       final Map<String, dynamic> responseData = json.decode(response.body);
 
       if (response.statusCode == 201) {
-        // --- ¡Éxito en el Registro! ---
-        print("Registro exitoso!");
-        print("Datos del usuario: $responseData");
-        
-        // Mostrar mensaje de éxito
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('¡Registro exitoso! Ya puedes iniciar sesión.')),
-        );
-        
-        // Regresar a la pantalla de Login después de 1 segundo
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('¡Registro exitoso! Ya puedes iniciar sesión.')),
+          );
+        }
         Future.delayed(const Duration(seconds: 1), () {
           if (mounted) {
             Navigator.of(context).pop();
@@ -70,124 +70,226 @@ class _RegisterScreenState extends State<RegisterScreen> {
         });
 
       } else {
-        // Error desde la API (ej. teléfono ya registrado)
-        print("Error en el registro: ${responseData['detail']}");
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: ${responseData['detail']}')),
-        );
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Error: ${responseData['detail']}')),
+          );
+        }
       }
     } catch (e) {
-      // Error de conexión
-      print("Error de conexión: $e");
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error de conexión: $e')),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error de conexión: $e')),
+        );
+      }
     }
 
-    setState(() {
-      _isLoading = false;
-    });
+    if (mounted) {
+      setState(() { _isLoading = false; });
+    }
   }
 
+  // --- NUEVO DISEÑO ---
   @override
   Widget build(BuildContext context) {
+    // Definimos la paleta del logo
+    const Color kDarkBlue = Color(0xFF0a192f); // Azul oscuro de fondo
+    const Color kLightBlue = Color(0xFF4FC3F7); // Azul claro para botones
+    const Color kGreyText = Colors.white70;
+
     return Scaffold(
-      // Añadimos una AppBar para tener un botón de "atrás"
+      // La AppBar se integra con el fondo
       appBar: AppBar(
         title: const Text('Crear Cuenta'),
         backgroundColor: Colors.transparent, // Fondo transparente
         elevation: 0, // Sin sombra
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios), // Ícono más estilizado
+          onPressed: () => Navigator.of(context).pop(),
+        ),
       ),
-      body: Center(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(32.0),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const Text(
-                'BarberSpot',
-                style: TextStyle(
-                  fontSize: 48,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.white,
-                ),
-              ),
-              const SizedBox(height: 48),
-
-              // --- Campo de Nombre ---
-              TextField(
-                controller: _nombreController,
-                keyboardType: TextInputType.name,
-                decoration: InputDecoration(
-                  labelText: 'Nombre Completo',
-                  prefixIcon: const Icon(Icons.person),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
+      // Extendemos el body detrás de la AppBar
+      extendBodyBehindAppBar: true, 
+      
+      body: Stack(
+        fit: StackFit.expand,
+        children: [
+          // --- 1. FONDO (Igual que en Login) ---
+          Container(
+            color: kDarkBlue,
+          ),
+          // (Si tienes una imagen de fondo, ponla aquí)
+          // Image.asset(
+          //   'assets/images/barber_bg.jpg', 
+          //   fit: BoxFit.cover,
+          // ),
+          
+          // --- 2. CONTENIDO ---
+          Center(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(24.0),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  // --- 3. TU LOGO ---
+                  Image.asset(
+                    'assets/images/BarberSpot1.png', // Ruta de tu logo
+                    height: 200, // Un poco más pequeño que en el login
                   ),
-                ),
-              ),
-              const SizedBox(height: 20),
+                  const SizedBox(height: 24),
 
-              // --- Campo de Teléfono ---
-              TextField(
-                controller: _telefonoController,
-                keyboardType: TextInputType.phone,
-                decoration: InputDecoration(
-                  labelText: 'Número de Teléfono',
-                  prefixIcon: const Icon(Icons.phone),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 20),
-
-              // --- Campo de Contraseña ---
-              TextField(
-                controller: _passwordController,
-                obscureText: true, // Oculta la contraseña
-                decoration: InputDecoration(
-                  labelText: 'Contraseña',
-                  prefixIcon: const Icon(Icons.lock),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 32),
-
-              // --- Botón de Registro ---
-              _isLoading
-                  ? const CircularProgressIndicator()
-                  : SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton(
-                        onPressed: _register, // Llama a la función _register
-                        style: ElevatedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(vertical: 16),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
+                  // --- 4. CONTENEDOR DE VIDRIO ---
+                  _buildGlassContainer(
+                    child: Column(
+                      children: [
+                        // --- 5. CAMPOS DE TEXTO ---
+                        _buildTextField(
+                          controller: _nombreController,
+                          label: 'Nombre Completo',
+                          icon: Icons.person,
+                          keyboard: TextInputType.name,
+                        ),
+                        const SizedBox(height: 20),
+                        
+                        _buildTextField(
+                          controller: _telefonoController,
+                          label: 'Número de Teléfono',
+                          icon: Icons.phone,
+                          keyboard: TextInputType.phone,
+                        ),
+                        const SizedBox(height: 20),
+                        
+                        // --- ¡NUEVO! CAMPO DE CONTRASEÑA CON VISIBILIDAD ---
+                        TextField(
+                          controller: _passwordController,
+                          obscureText: _isPasswordObscured, 
+                          decoration: InputDecoration(
+                            labelText: 'Contraseña',
+                            prefixIcon: Icon(Icons.lock, color: Colors.white70),
+                            labelStyle: const TextStyle(color: Colors.white70),
+                            filled: true,
+                            fillColor: Colors.white.withOpacity(0.1),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: BorderSide.none,
+                            ),
+                            enabledBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: BorderSide.none,
+                            ),
+                            focusedBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: BorderSide(color: Colors.lightBlue[300]!, width: 1.5),
+                            ),
+                            suffixIcon: IconButton(
+                              icon: Icon(
+                                _isPasswordObscured ? Icons.visibility_off : Icons.visibility,
+                                color: Colors.white70,
+                              ),
+                              onPressed: () {
+                                setState(() {
+                                  _isPasswordObscured = !_isPasswordObscured;
+                                });
+                              },
+                            ),
                           ),
                         ),
-                        child: const Text(
-                          'Registrarse',
-                          style: TextStyle(fontSize: 18),
-                        ),
-                      ),
-                    ),
-              
-              const SizedBox(height: 24),
+                        const SizedBox(height: 32),
 
-              // --- Botón para ir a Login ---
-              TextButton(
-                onPressed: () {
-                  // Simplemente regresa a la pantalla anterior (Login)
-                  Navigator.of(context).pop();
-                },
-                child: const Text('¿Ya tienes cuenta? Inicia sesión'),
+                        // --- 6. BOTÓN DE REGISTRO ---
+                        _isLoading
+                            ? const CircularProgressIndicator()
+                            : SizedBox(
+                                width: double.infinity,
+                                child: ElevatedButton(
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: kLightBlue,
+                                    padding: const EdgeInsets.symmetric(vertical: 16),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(30),
+                                    ),
+                                  ),
+                                  onPressed: _register,
+                                  child: const Text(
+                                    'Registrarse',
+                                    style: TextStyle(fontSize: 16, color: kDarkBlue, fontWeight: FontWeight.bold),
+                                  ),
+                                ),
+                              ),
+                        const SizedBox(height: 24),
+
+                        // --- 7. BOTÓN DE TEXTO ---
+                        TextButton(
+                          onPressed: () {
+                            Navigator.of(context).pop();
+                          },
+                          child: const Text('¿Ya tienes cuenta? Inicia sesión', style: TextStyle(color: kGreyText)),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
               ),
-            ],
+            ),
           ),
+        ],
+      ),
+    );
+  }
+
+  // --- WIDGET HELPER para el campo de texto ---
+  Widget _buildTextField({
+    required TextEditingController controller,
+    required String label,
+    required IconData icon,
+    bool isPassword = false,
+    TextInputType? keyboard,
+  }) {
+    return TextField(
+      controller: controller,
+      obscureText: isPassword,
+      keyboardType: keyboard,
+      decoration: InputDecoration(
+        labelText: label,
+        prefixIcon: Icon(icon, color: Colors.white70),
+        labelStyle: const TextStyle(color: Colors.white70),
+        // Estilo del "vidrio" para el campo
+        filled: true,
+        fillColor: Colors.white.withOpacity(0.1),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide.none,
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide.none,
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: Colors.lightBlue[300]!, width: 1.5),
+        ),
+      ),
+    );
+  }
+
+  // --- WIDGET HELPER para el contenedor Glassmorphic ---
+  Widget _buildGlassContainer({required Widget child}) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(20),
+      child: BackdropFilter(
+        // Este es el filtro de desenfoque
+        filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+        child: Container(
+          padding: const EdgeInsets.all(24),
+          // Aquí usamos la paleta de colores del logo
+          decoration: BoxDecoration(
+            // El color del "vidrio"
+            color: Colors.black.withOpacity(0.25),
+            borderRadius: BorderRadius.circular(20),
+            // El borde sutil del "vidrio"
+            border: Border.all(color: Colors.white.withOpacity(0.2), width: 1),
+          ),
+          child: child,
         ),
       ),
     );

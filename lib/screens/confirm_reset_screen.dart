@@ -1,3 +1,6 @@
+// Importa este nuevo paquete para el efecto de desenfoque
+import 'dart:ui';
+
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
@@ -13,10 +16,8 @@ class ConfirmResetScreen extends StatefulWidget {
 }
 
 class _ConfirmResetScreenState extends State<ConfirmResetScreen> {
-  // GlobalKey para validar el formulario
   final _formKey = GlobalKey<FormState>();
 
-  // Controladores para los campos
   final TextEditingController _codeController = TextEditingController();
   final TextEditingController _newPasswordController = TextEditingController();
   final TextEditingController _confirmPasswordController = TextEditingController();
@@ -26,56 +27,47 @@ class _ConfirmResetScreenState extends State<ConfirmResetScreen> {
   bool _obscureConfirmPassword = true;
 
   Future<void> _confirmarReseteo() async {
-    // Primero, valida el formulario
     if (!_formKey.currentState!.validate()) {
-      return; // Si no es válido, no hace nada
+      return; 
     }
 
-    // Si es válido, procede con la llamada a la API
     if (!mounted) return;
     setState(() {
       _isLoading = true;
     });
 
-    final String apiUrl = "http://127.0.0.1:8000/password/confirmar-reset"; // Usa 10.0.2.2 para emulador Android
+    final String apiUrl = "http://127.0.0.1:8000/password/confirmar-reset"; 
 
     try {
       final response = await http.post(
         Uri.parse(apiUrl),
         headers: {'Content-Type': 'application/json; charset=UTF-8'},
         body: json.encode({
-          'telefono': widget.telefono, // Teléfono recibido
-          'code': _codeController.text, // Código ingresado
-          'new_password': _newPasswordController.text, // Nueva contraseña
+          'telefono': widget.telefono, 
+          'code': _codeController.text, 
+          'new_password': _newPasswordController.text, 
         }),
       ).timeout(const Duration(seconds: 10));
 
-      if (!mounted) return; // Verificar después del await
+      if (!mounted) return; 
 
       if (response.statusCode == 200) {
-        // ¡Éxito!
         final Map<String, dynamic> responseData = json.decode(response.body);
-        print("Mensaje de confirmación: ${responseData['message']}");
-
-        // Muestra mensaje de éxito
+        
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(responseData['message']), backgroundColor: Colors.green),
         );
 
-        // Espera un poquito para que el usuario vea el mensaje y navega al Login
         await Future.delayed(const Duration(seconds: 2));
         if (mounted) {
-           // Usamos pushAndRemoveUntil para limpiar el stack de navegación
            Navigator.of(context).pushAndRemoveUntil(
              MaterialPageRoute(builder: (context) => const LoginScreen()),
-             (Route<dynamic> route) => false, // Elimina todas las rutas anteriores
+             (Route<dynamic> route) => false, 
            );
         }
 
       } else {
-        // Error de la API (código incorrecto, expirado, etc.)
         final Map<String, dynamic> responseData = json.decode(response.body);
-        print("Error al confirmar reseteo: ${responseData['detail']}");
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(content: Text('Error: ${responseData['detail'] ?? 'Error desconocido'}')),
@@ -84,7 +76,6 @@ class _ConfirmResetScreenState extends State<ConfirmResetScreen> {
       }
 
     } catch (e) {
-      print("Error de conexión al confirmar reseteo: $e");
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Error de conexión. Intenta de nuevo.')),
@@ -98,113 +89,185 @@ class _ConfirmResetScreenState extends State<ConfirmResetScreen> {
        }
     }
   }
-
+  
+  // --- NUEVO DISEÑO ---
   @override
   Widget build(BuildContext context) {
+    // Definimos la paleta del logo
+    const Color kDarkBlue = Color(0xFF0a192f); 
+    const Color kLightBlue = Color(0xFF4FC3F7); 
+    const Color kGreyText = Colors.white70;
+    const Color kWhiteText = Colors.white;
+
     return Scaffold(
+      // AppBar integrada
       appBar: AppBar(
-        title: const Text('Ingresar Código'),
+        title: const Text('Confirmar Código'),
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios),
+          onPressed: () => Navigator.of(context).pop(),
+        ),
       ),
-      body: Center( // Centra el contenido verticalmente
-        child: SingleChildScrollView( // Permite scroll si el teclado aparece
-          padding: const EdgeInsets.all(20.0),
-          child: Form( // Usamos un Form para validaciones
-            key: _formKey,
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center, // Centra los elementos
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Text(
-                  'Ingresa el código de 6 dígitos que recibiste (simulado en consola) y tu nueva contraseña.',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(fontSize: 16, color: Colors.grey[400]),
-                ),
-                const SizedBox(height: 30),
+      extendBodyBehindAppBar: true,
 
-                // --- Campo Código ---
-                TextFormField(
-                  controller: _codeController,
-                  keyboardType: TextInputType.number,
-                  maxLength: 6, // Limita a 6 dígitos
-                  textAlign: TextAlign.center, // Centra el texto del código
-                  style: const TextStyle(fontSize: 24, letterSpacing: 8), // Estilo más grande para el código
-                  decoration: InputDecoration(
-                    labelText: 'Código de Verificación',
-                    counterText: "", // Oculta el contador de caracteres
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                  ),
-                  validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return 'Por favor ingresa el código';
-                    }
-                    if (value.length != 6) {
-                      return 'El código debe tener 6 dígitos';
-                    }
-                    return null; // Válido
-                  },
-                ),
-                const SizedBox(height: 20),
+      body: Stack(
+        fit: StackFit.expand,
+        children: [
+          // --- 1. FONDO ---
+          Container(
+            color: kDarkBlue,
+          ),
+          // (Si tienes una imagen de fondo, ponla aquí)
+          // Image.asset('assets/images/barber_bg.jpg', fit: BoxFit.cover),
 
-                // --- Campo Nueva Contraseña ---
-                TextFormField(
-                  controller: _newPasswordController,
-                  obscureText: _obscurePassword,
-                  decoration: InputDecoration(
-                    labelText: 'Nueva Contraseña',
-                    prefixIcon: const Icon(Icons.lock_outline),
-                    suffixIcon: IconButton(
-                       icon: Icon(_obscurePassword ? Icons.visibility_off : Icons.visibility),
-                       onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
-                    ),
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                  ),
-                  validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return 'Por favor ingresa una contraseña';
-                    }
-                    if (value.length < 6) { // Ejemplo: mínimo 6 caracteres
-                       return 'La contraseña debe tener al menos 6 caracteres';
-                    }
-                    return null;
-                  },
-                ),
-                const SizedBox(height: 20),
+          // --- 2. CONTENIDO ---
+          Center(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(24.0),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  
+                  // --- 3. CONTENEDOR DE VIDRIO ---
+                  _buildGlassContainer(
+                    child: Form(
+                      key: _formKey,
+                      child: Column(
+                        children: [
+                          const Text(
+                            'Ingresa el código y tu nueva contraseña',
+                            style: TextStyle(
+                              fontSize: 22,
+                              fontWeight: FontWeight.bold,
+                              color: kWhiteText,
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                          const SizedBox(height: 32),
+                          
+                          // --- CAMPO CÓDIGO ---
+                          TextFormField(
+                            controller: _codeController,
+                            keyboardType: TextInputType.number,
+                            maxLength: 6,
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(fontSize: 24, letterSpacing: 8, color: kWhiteText),
+                            decoration: _glassInputDecoration(
+                              label: 'Código de Verificación',
+                              icon: Icons.pin,
+                            ).copyWith(counterText: ""), // Oculta el contador
+                            validator: (value) {
+                              if (value == null || value.isEmpty) return 'Ingresa el código';
+                              if (value.length != 6) return 'El código debe tener 6 dígitos';
+                              return null; 
+                            },
+                          ),
+                          const SizedBox(height: 20),
 
-                // --- Campo Confirmar Contraseña ---
-                TextFormField(
-                  controller: _confirmPasswordController,
-                  obscureText: _obscureConfirmPassword,
-                  decoration: InputDecoration(
-                    labelText: 'Confirmar Nueva Contraseña',
-                    prefixIcon: const Icon(Icons.lock_outline),
-                     suffixIcon: IconButton(
-                       icon: Icon(_obscureConfirmPassword ? Icons.visibility_off : Icons.visibility),
-                       onPressed: () => setState(() => _obscureConfirmPassword = !_obscureConfirmPassword),
-                    ),
-                     border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                  ),
-                  validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return 'Por favor confirma la contraseña';
-                    }
-                    if (value != _newPasswordController.text) {
-                      return 'Las contraseñas no coinciden';
-                    }
-                    return null;
-                  },
-                ),
-                const SizedBox(height: 40),
+                          // --- CAMPO NUEVA CONTRASEÑA ---
+                          TextFormField(
+                            controller: _newPasswordController,
+                            obscureText: _obscurePassword,
+                            decoration: _glassInputDecoration(
+                              label: 'Nueva Contraseña',
+                              icon: Icons.lock_outline,
+                              suffixIcon: IconButton(
+                                icon: Icon(_obscurePassword ? Icons.visibility_off : Icons.visibility, color: kGreyText),
+                                onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
+                              ),
+                            ),
+                            validator: (value) {
+                              if (value == null || value.isEmpty) return 'Ingresa una contraseña';
+                              if (value.length < 6) return 'Mínimo 6 caracteres';
+                              return null;
+                            },
+                          ),
+                          const SizedBox(height: 20),
 
-                // --- Botón Restablecer ---
-                _isLoading
-                    ? const Center(child: CircularProgressIndicator())
-                    : ElevatedButton(
-                        onPressed: _confirmarReseteo,
-                        child: const Text('Restablecer Contraseña'),
+                          // --- CAMPO CONFIRMAR CONTRASEÑA ---
+                          TextFormField(
+                            controller: _confirmPasswordController,
+                            obscureText: _obscureConfirmPassword,
+                            decoration: _glassInputDecoration(
+                              label: 'Confirmar Contraseña',
+                              icon: Icons.lock_outline,
+                              suffixIcon: IconButton(
+                                icon: Icon(_obscureConfirmPassword ? Icons.visibility_off : Icons.visibility, color: kGreyText),
+                                onPressed: () => setState(() => _obscureConfirmPassword = !_obscureConfirmPassword),
+                              ),
+                            ),
+                            validator: (value) {
+                              if (value == null || value.isEmpty) return 'Confirma la contraseña';
+                              if (value != _newPasswordController.text) return 'Las contraseñas no coinciden';
+                              return null;
+                            },
+                          ),
+                          const SizedBox(height: 32),
+
+                          // --- BOTÓN RESTABLECER ---
+                          _isLoading
+                              ? const CircularProgressIndicator()
+                              : SizedBox(
+                                  width: double.infinity,
+                                  child: ElevatedButton(
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: kLightBlue,
+                                      padding: const EdgeInsets.symmetric(vertical: 16),
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(30),
+                                      ),
+                                    ),
+                                    onPressed: _confirmarReseteo,
+                                    child: const Text(
+                                      'Restablecer Contraseña',
+                                      style: TextStyle(fontSize: 16, color: kDarkBlue, fontWeight: FontWeight.bold),
+                                    ),
+                                  ),
+                                ),
+                        ],
                       ),
-              ],
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
+        ],
+      ),
+    );
+  }
+
+  // --- WIDGET HELPER para el estilo de los Inputs ---
+  InputDecoration _glassInputDecoration({required String label, required IconData icon, Widget? suffixIcon}) {
+    return InputDecoration(
+      labelText: label,
+      prefixIcon: Icon(icon, color: Colors.white70),
+      suffixIcon: suffixIcon,
+      labelStyle: const TextStyle(color: Colors.white70),
+      filled: true,
+      fillColor: Colors.white.withOpacity(0.1),
+      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+      focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: Colors.lightBlue[300]!, width: 1.5)),
+    );
+  }
+
+  // --- WIDGET HELPER para el contenedor Glassmorphic ---
+  Widget _buildGlassContainer({required Widget child}) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(20),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+        child: Container(
+          padding: const EdgeInsets.all(24),
+          decoration: BoxDecoration(
+            color: Colors.black.withOpacity(0.25),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: Colors.white.withOpacity(0.2), width: 1),
+          ),
+          child: child,
         ),
       ),
     );
