@@ -1,8 +1,11 @@
+// Importa este nuevo paquete para el efecto de desenfoque
+import 'dart:ui';
+
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 
-// Importaremos esta pantalla más tarde cuando la creemos
+// Asegúrate de que este archivo exista o créalo más tarde
 import 'confirm_reset_screen.dart';
 
 class RequestResetScreen extends StatefulWidget {
@@ -31,7 +34,7 @@ class _RequestResetScreenState extends State<RequestResetScreen> {
       _isLoading = true;
     });
 
-    final String apiUrl = "http://127.0.0.1:8000/password/solicitar-reset"; // Usa 10.0.2.2 para emulador Android
+    final String apiUrl = "http://127.0.0.1:8000/password/solicitar-reset"; 
 
     try {
       final response = await http.post(
@@ -40,47 +43,35 @@ class _RequestResetScreenState extends State<RequestResetScreen> {
         body: json.encode({'telefono': _telefonoController.text}),
       ).timeout(const Duration(seconds: 10));
 
-      if (!mounted) return; // Verificar después del await
+      if (!mounted) return; 
 
       final Map<String, dynamic> responseData = json.decode(response.body);
 
       if (response.statusCode == 200) {
-        // Éxito (incluso si el teléfono no existe, el backend devuelve 200)
         final String message = responseData['message'];
-        // --- ¡SOLO PARA DESARROLLO! ---
-        final String? resetCode = responseData['reset_code'];
-        print("Mensaje de la API: $message");
+        final String? resetCode = responseData['reset_code']; // SOLO DESARROLLO
         print("Código de reseteo (temporal): $resetCode");
-        // --- FIN SOLO PARA DESARROLLO ---
 
          if (!mounted) return;
 
-         // Mostramos el mensaje de la API al usuario
          ScaffoldMessenger.of(context).showSnackBar(
            SnackBar(content: Text(message)),
          );
 
-        // Si SÍ obtuvimos un código (o sea, el teléfono sí estaba registrado),
-        // navegamos a la siguiente pantalla.
         if (resetCode != null) {
-          Navigator.of(context).pushReplacement( // Usamos pushReplacement
+          Navigator.of(context).pushReplacement( 
             MaterialPageRoute(
               builder: (context) => ConfirmResetScreen(
-                telefono: _telefonoController.text, // Pasamos el teléfono
-                // No pasamos el código, el usuario debe ingresarlo
+                telefono: _telefonoController.text, 
               ),
             ),
           );
         } else {
-           // Si no hubo código, nos quedamos aquí (teléfono no encontrado)
            setState(() => _isLoading = false);
         }
 
-
       } else {
-        // Error inesperado del backend (distinto de usuario no encontrado)
-        print("Error al solicitar código: ${responseData['detail']}");
-         if (mounted) {
+        if (mounted) {
            ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(content: Text('Error: ${responseData['detail'] ?? 'Error desconocido'}')),
           );
@@ -89,7 +80,6 @@ class _RequestResetScreenState extends State<RequestResetScreen> {
       }
 
     } catch (e) {
-      print("Error de conexión al solicitar código: $e");
        if (mounted) {
          ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Error de conexión. Intenta de nuevo.')),
@@ -97,44 +87,148 @@ class _RequestResetScreenState extends State<RequestResetScreen> {
          setState(() => _isLoading = false);
        }
     }
-     // No necesitamos setState(isLoading=false) aquí si navegamos
   }
 
+  // --- NUEVO DISEÑO ---
   @override
   Widget build(BuildContext context) {
+    // Definimos la paleta del logo
+    const Color kDarkBlue = Color(0xFF0a192f); 
+    const Color kLightBlue = Color(0xFF4FC3F7); 
+    const Color kGreyText = Colors.white70;
+    const Color kWhiteText = Colors.white;
+
     return Scaffold(
+      // AppBar integrada
       appBar: AppBar(
-        title: const Text('Restablecer Contraseña'),
+        title: const Text('Recuperar Contraseña'),
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios),
+          onPressed: () => Navigator.of(context).pop(),
+        ),
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(20.0),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            const Text(
-              'Ingresa tu número de teléfono para recibir un código de verificación (simulado).',
-              textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 16, color: Colors.grey),
-            ),
-            const SizedBox(height: 30),
-            TextField(
-              controller: _telefonoController,
-              keyboardType: TextInputType.phone,
-              decoration: const InputDecoration(
-                labelText: 'Número de Teléfono',
-                prefixIcon: Icon(Icons.phone),
-                // Estilo del tema
+      extendBodyBehindAppBar: true,
+
+      body: Stack(
+        fit: StackFit.expand,
+        children: [
+          // --- 1. FONDO ---
+          Container(
+            color: kDarkBlue,
+          ),
+          // Image.asset('assets/images/barber_bg.jpg', fit: BoxFit.cover),
+
+          // --- 2. CONTENIDO ---
+          Center(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(24.0),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  // Icono grande de candado o similar
+                  Icon(Icons.lock_reset, size: 80, color: kLightBlue.withOpacity(0.8)),
+                  const SizedBox(height: 32),
+
+                  // --- 3. CONTENEDOR DE VIDRIO ---
+                  _buildGlassContainer(
+                    child: Column(
+                      children: [
+                        const Text(
+                          '¿Olvidaste tu contraseña?',
+                          style: TextStyle(
+                            fontSize: 22,
+                            fontWeight: FontWeight.bold,
+                            color: kWhiteText,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                        const SizedBox(height: 16),
+                        const Text(
+                          'Ingresa tu número de teléfono y te enviaremos un código para restablecerla.',
+                          style: TextStyle(fontSize: 16, color: kGreyText),
+                          textAlign: TextAlign.center,
+                        ),
+                        const SizedBox(height: 32),
+
+                        // --- CAMPO DE TELÉFONO ---
+                        _buildTextField(
+                          controller: _telefonoController,
+                          label: 'Número de Teléfono',
+                          icon: Icons.phone,
+                          keyboard: TextInputType.phone,
+                        ),
+                        const SizedBox(height: 32),
+
+                        // --- BOTÓN DE ENVIAR ---
+                        _isLoading
+                            ? const CircularProgressIndicator()
+                            : SizedBox(
+                                width: double.infinity,
+                                child: ElevatedButton(
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: kLightBlue,
+                                    padding: const EdgeInsets.symmetric(vertical: 16),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(30),
+                                    ),
+                                  ),
+                                  onPressed: _solicitarCodigo,
+                                  child: const Text(
+                                    'Enviar Código',
+                                    style: TextStyle(fontSize: 16, color: kDarkBlue, fontWeight: FontWeight.bold),
+                                  ),
+                                ),
+                              ),
+                      ],
+                    ),
+                  ),
+                ],
               ),
             ),
-            const SizedBox(height: 30),
-            _isLoading
-                ? const Center(child: CircularProgressIndicator())
-                : ElevatedButton(
-                    onPressed: _solicitarCodigo,
-                    child: const Text('Enviar Código'),
-                  ),
-          ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  // --- WIDGETS HELPER (Idénticos a los de Login/Registro) ---
+  Widget _buildTextField({
+    required TextEditingController controller,
+    required String label,
+    required IconData icon,
+    TextInputType? keyboard,
+  }) {
+    return TextField(
+      controller: controller,
+      keyboardType: keyboard,
+      decoration: InputDecoration(
+        labelText: label,
+        prefixIcon: Icon(icon, color: Colors.white70),
+        labelStyle: const TextStyle(color: Colors.white70),
+        filled: true,
+        fillColor: Colors.white.withOpacity(0.1),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: Colors.lightBlue[300]!, width: 1.5)),
+      ),
+    );
+  }
+
+  Widget _buildGlassContainer({required Widget child}) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(20),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+        child: Container(
+          padding: const EdgeInsets.all(24),
+          decoration: BoxDecoration(
+            color: Colors.black.withOpacity(0.25),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: Colors.white.withOpacity(0.2), width: 1),
+          ),
+          child: child,
         ),
       ),
     );

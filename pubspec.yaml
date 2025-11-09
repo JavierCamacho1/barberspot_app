@@ -67,6 +67,11 @@ flutter:
   # the material Icons class.
   uses-material-design: true
 
+  # --- ¡ASÍ DEBE VERSE! ---
+  # 'assets:' tiene 2 espacios
+  assets:
+    # '- assets/images/' tiene 4 espacios
+    - assets/images/
   # To add assets to your application, add an assets section, like this:
   # assets:
   #   - images/a_dot_burr.jpeg

@@ -1,15 +1,16 @@
+// Importa este nuevo paquete para el efecto de desenfoque
+import 'dart:ui'; 
+
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'client_home_screen.dart'; // Pantalla principal del cliente
+import 'client_home_screen.dart'; 
 import 'register_screen.dart';
-import 'map_screen.dart'; // Pantalla del mapa
-// --- ¡IMPORTACIONES PARA ROLES Y RESET! ---
-import 'request_reset_screen.dart'; // Pantalla para solicitar reseteo
-import 'barber_home_screen.dart'; // <-- Pantalla principal del barbero
+import 'map_screen.dart'; 
+import 'request_reset_screen.dart'; 
+import 'barber_home_screen.dart'; 
 import 'admin_home_screen.dart';
-// --- FIN IMPORTACIONES ---
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -22,57 +23,49 @@ class _LoginScreenState extends State<LoginScreen> {
   final TextEditingController _telefonoController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
   bool _isLoading = false;
+  
+  // --- ¡NUEVO! Variable de estado para ver/ocultar contraseña ---
+  bool _isPasswordObscured = true;
 
+  // --- LÓGICA DE LOGIN (Sin cambios) ---
   Future<void> _login() async {
-    // Validación de campos vacíos
     if (_telefonoController.text.isEmpty || _passwordController.text.isEmpty) {
       if (mounted) {
-         ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Por favor, ingresa teléfono y contraseña.')),
         );
       }
       return;
     }
-
     if (!mounted) return;
     setState(() { _isLoading = true; });
 
-    // Usa 10.0.2.2 para emulador Android, localhost o 127.0.0.1 para web/físico
     final String apiUrl = "http://127.0.0.1:8000/login";
 
     try {
-      // Usamos los datos reales en el body de la petición POST
       final response = await http.post(
-          Uri.parse(apiUrl),
-          headers: {'Content-Type': 'application/json; charset=UTF-8'},
-          body: json.encode({
-            'telefono': _telefonoController.text,
-            'password': _passwordController.text,
-          }),
-        ).timeout(const Duration(seconds: 10)); // Timeout añadido
+        Uri.parse(apiUrl),
+        headers: {'Content-Type': 'application/json; charset=UTF-8'},
+        body: json.encode({
+          'telefono': _telefonoController.text,
+          'password': _passwordController.text,
+        }),
+      ).timeout(const Duration(seconds: 10));
 
-      if (!mounted) return; // Verificar después del await
-
+      if (!mounted) return;
       final Map<String, dynamic> responseData = json.decode(response.body);
 
       if (response.statusCode == 200) {
-        print("Login exitoso!");
         final prefs = await SharedPreferences.getInstance();
-        // Guardar datos en SharedPreferences
         await prefs.setInt('user_id', responseData['id']);
         await prefs.setString('user_nombre', responseData['nombre']);
         await prefs.setString('user_rol', responseData['rol']);
         final String? barberiaIdStr = responseData['barberia_id']?.toString();
         await prefs.setString('barberia_id', barberiaIdStr ?? 'null');
-        // Opcional: guardar nombre barberia si viene del login o hacer otra llamada
-        // await prefs.setString('barberia_nombre', responseData['barberia_nombre'] ?? '');
 
-
-        // --- Lógica de Redirección Inteligente (¡CORREGIDA!) ---
+        if (!mounted) return;
         final String userRol = responseData['rol'];
         final bool tieneBarberia = barberiaIdStr != null && barberiaIdStr != 'null';
-
-        if (!mounted) return; // Verificar antes de navegar
 
         if (userRol == 'cliente') {
           if (tieneBarberia) {
@@ -84,125 +77,242 @@ class _LoginScreenState extends State<LoginScreen> {
               MaterialPageRoute(builder: (context) => const MapScreen()),
             );
           }
-        } else if (userRol == 'barbero') { // <-- ¡ESTA ES LA CORRECCIÓN!
-           Navigator.of(context).pushReplacement(
-              MaterialPageRoute(builder: (context) => const BarberHomeScreen()), // <-- VA A BARBER HOME
-           );
+        } else if (userRol == 'barbero') { 
+          Navigator.of(context).pushReplacement(
+            MaterialPageRoute(builder: (context) => const BarberHomeScreen()),
+          );
         } else if (userRol == 'admin') {
-       Navigator.of(context).pushReplacement(
-          MaterialPageRoute(builder: (context) => const AdminHomeScreen()), // <-- CORREGIDO
-       );
-    } else {
-           // Rol desconocido -> Login
-            Navigator.of(context).pushReplacement(
-             MaterialPageRoute(builder: (context) => const LoginScreen()),
-           );
+          Navigator.of(context).pushReplacement(
+            MaterialPageRoute(builder: (context) => const AdminHomeScreen()), 
+          );
+        } else {
+          Navigator.of(context).pushReplacement(
+            MaterialPageRoute(builder: (context) => const LoginScreen()),
+          );
         }
-        // --- Fin Lógica Redirección ---
-
       } else {
-         // Manejo de errores de login
-         print("Error en el login: ${responseData['detail']}");
-         if (mounted) {
+        if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(content: Text('Error: ${responseData['detail']}')),
           );
-         }
+        }
       }
-
     } catch (e) {
-       // Manejo de errores de conexión
-       print("Error de conexión: $e");
-       if (mounted) {
+      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Error de conexión. Revisa el servidor.')),
         );
-       }
+      }
     } finally {
-       if (mounted) { setState(() { _isLoading = false; }); }
+      if (mounted) { setState(() { _isLoading = false; }); }
     }
   }
 
+  // --- NUEVO DISEÑO ---
   @override
   Widget build(BuildContext context) {
-    // El resto del build sigue igual: TextFields, Botones, Enlaces
-     return Scaffold(
-      body: Center(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(32.0),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const Text(
-                  'BarberSpot',
-                   style: TextStyle(
-                    fontSize: 48,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.white,
+    // Definimos la paleta del logo
+    const Color kDarkBlue = Color(0xFF0a192f); // Azul oscuro de fondo
+    const Color kLightBlue = Color(0xFF4FC3F7); // Azul claro para botones
+    const Color kWhiteText = Colors.white;
+    const Color kGreyText = Colors.white70;
+
+    return Scaffold(
+      body: Stack(
+        fit: StackFit.expand,
+        children: [
+          // --- 1. FONDO ---
+          Container(
+            color: kDarkBlue,
+          ),
+          // (Si tienes una imagen de fondo, ponla aquí)
+          // Image.asset(
+          //   'assets/images/barber_bg.jpg', 
+          //   fit: BoxFit.cover,
+          // ),
+
+          // --- 2. CONTENIDO ---
+          Center(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(24.0),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  // --- 3. TU LOGO ---
+                  Image.asset(
+                    'assets/images/BarberSpot1.png', // Ruta de tu logo
+                    height: 200,
                   ),
+                  const Text(
+                'BarberSpot',
+                style: TextStyle(
+                  fontSize: 48,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
                 ),
+              ),
               const SizedBox(height: 48),
-              TextField(
-                 controller: _telefonoController,
-                 keyboardType: TextInputType.phone,
-                 decoration: InputDecoration(
-                   labelText: 'Número de Teléfono',
-                   prefixIcon: const Icon(Icons.phone),
-                   // Usar tema definido en main.dart
-                 ),
-               ),
-              const SizedBox(height: 20),
-              TextField(
-                 controller: _passwordController,
-                 obscureText: true,
-                 decoration: InputDecoration(
-                   labelText: 'Contraseña',
-                   prefixIcon: const Icon(Icons.lock),
-                    // Usar tema definido en main.dart
-                 ),
-               ),
-              const SizedBox(height: 32),
-              _isLoading
-                ? const CircularProgressIndicator()
-                : SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton(
-                      onPressed: _login,
-                      // Estilo tomado del tema en main.dart
-                      child: const Text('Iniciar Sesión'),
+
+                  // --- 4. CONTENEDOR DE VIDRIO ---
+                  _buildGlassContainer(
+                    child: Column(
+                      children: [
+                        // --- CAMPO DE TELÉFONO ---
+                        _buildTextField(
+                          controller: _telefonoController,
+                          label: 'Número de Teléfono',
+                          icon: Icons.phone,
+                          keyboard: TextInputType.phone,
+                        ),
+                        const SizedBox(height: 20),
+
+                        // --- ¡NUEVO! CAMPO DE CONTRASEÑA CON VISIBILIDAD ---
+                        TextField(
+                          controller: _passwordController,
+                          // Usa la variable de estado
+                          obscureText: _isPasswordObscured, 
+                          decoration: InputDecoration(
+                            labelText: 'Contraseña',
+                            prefixIcon: Icon(Icons.lock, color: Colors.white70),
+                            labelStyle: const TextStyle(color: Colors.white70),
+                            filled: true,
+                            fillColor: Colors.white.withOpacity(0.1),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: BorderSide.none,
+                            ),
+                            enabledBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: BorderSide.none,
+                            ),
+                            focusedBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: BorderSide(color: Colors.lightBlue[300]!, width: 1.5),
+                            ),
+                            // --- ¡NUEVO! Botón para ver/ocultar ---
+                            suffixIcon: IconButton(
+                              icon: Icon(
+                                _isPasswordObscured ? Icons.visibility_off : Icons.visibility,
+                                color: Colors.white70,
+                              ),
+                              onPressed: () {
+                                // Cambia el estado
+                                setState(() {
+                                  _isPasswordObscured = !_isPasswordObscured;
+                                });
+                              },
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 32),
+
+                        // --- 6. BOTÓN DE LOGIN ---
+                        _isLoading
+                            ? const CircularProgressIndicator()
+                            : SizedBox(
+                                width: double.infinity,
+                                child: ElevatedButton(
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: kLightBlue,
+                                    padding: const EdgeInsets.symmetric(vertical: 16),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(30),
+                                    ),
+                                  ),
+                                  onPressed: _login,
+                                  child: const Text(
+                                    'Iniciar Sesión',
+                                    style: TextStyle(fontSize: 16, color: kDarkBlue, fontWeight: FontWeight.bold),
+                                  ),
+                                ),
+                              ),
+                        const SizedBox(height: 24),
+
+                        // --- 7. BOTONES DE TEXTO ---
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            TextButton(
+                              onPressed: () {
+                                Navigator.of(context).push(MaterialPageRoute(
+                                  builder: (context) => const RegisterScreen(),
+                                ));
+                              },
+                              child: const Text('Regístrate aqui', style: TextStyle(color: kGreyText)),
+                            ),
+                            TextButton(
+                              onPressed: () {
+                                Navigator.of(context).push(MaterialPageRoute(
+                                  builder: (context) => const RequestResetScreen(),
+                                ));
+                              },
+                              child: const Text('¿Olvidaste tu contraseña?', style: TextStyle(color: kGreyText)),
+                            ),
+                          ],
+                        ),
+                      ],
                     ),
                   ),
-              const SizedBox(height: 24),
-              TextButton(
-                 onPressed: () {
-                   Navigator.of(context).push(
-                     MaterialPageRoute(
-                       builder: (context) => const RegisterScreen(),
-                     ),
-                   );
-                 },
-                 child: const Text('¿No tienes cuenta? Regístrate'),
-               ),
-              const SizedBox(height: 10),
-              TextButton(
-                 onPressed: () {
-                   Navigator.of(context).push(
-                     MaterialPageRoute(
-                       builder: (context) => const RequestResetScreen(),
-                     ),
-                   );
-                 },
-                 style: TextButton.styleFrom(padding: EdgeInsets.zero),
-                 child: Text(
-                   '¿Olvidaste tu contraseña?',
-                   style: TextStyle(color: Colors.grey[400], fontSize: 14),
-                 ),
-               ),
-            ],
+                ],
+              ),
+            ),
           ),
+        ],
+      ),
+    );
+  }
+
+  // --- WIDGET HELPER (Solo para el campo de teléfono ahora) ---
+  Widget _buildTextField({
+    required TextEditingController controller,
+    required String label,
+    required IconData icon,
+    TextInputType? keyboard,
+  }) {
+    return TextField(
+      controller: controller,
+      keyboardType: keyboard,
+      decoration: InputDecoration(
+        labelText: label,
+        prefixIcon: Icon(icon, color: Colors.white70),
+        labelStyle: const TextStyle(color: Colors.white70),
+        filled: true,
+        fillColor: Colors.white.withOpacity(0.1),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide.none,
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide.none,
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: Colors.lightBlue[300]!, width: 1.5),
+        ),
+      ),
+    );
+  }
+
+  // --- WIDGET HELPER para el contenedor Glassmorphic ---
+  Widget _buildGlassContainer({required Widget child}) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(20),
+      child: BackdropFilter(
+        // Este es el filtro de desenfoque
+        filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+        child: Container(
+          padding: const EdgeInsets.all(24),
+          decoration: BoxDecoration(
+            // El color del "vidrio"
+            color: Colors.black.withOpacity(0.25),
+            borderRadius: BorderRadius.circular(20),
+            // El borde sutil del "vidrio"
+            border: Border.all(color: Colors.white.withOpacity(0.2), width: 1),
+          ),
+          child: child,
         ),
       ),
     );
   }
 }
-

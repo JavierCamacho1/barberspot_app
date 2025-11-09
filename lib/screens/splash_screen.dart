@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'login_screen.dart';  // A dónde ir si NO hay sesión
+import 'login_screen.dart';
 import 'client_home_screen.dart';
 import 'map_screen.dart';
 import 'barber_home_screen.dart';
@@ -21,68 +21,66 @@ class _SplashScreenState extends State<SplashScreen> {
   }
 
   Future<void> _verificarSesion() async {
-  final prefs = await SharedPreferences.getInstance();
-  final String? userRol = prefs.getString('user_rol');
-  final String? barberiaId = prefs.getString('barberia_id');
+    final prefs = await SharedPreferences.getInstance();
+    final String? userRol = prefs.getString('user_rol');
+    final String? barberiaId = prefs.getString('barberia_id');
 
-  await Future.delayed(const Duration(seconds: 1)); // Espera corta
-  if (!mounted) return;
+    // Espera un poco más para que se vea el logo (opcional)
+    await Future.delayed(const Duration(seconds: 2)); 
+    if (!mounted) return;
 
-  // --- LÓGICA DE REDIRECCIÓN (CORREGIDA) ---
-  if (userRol == null) {
-    // 1. Sin sesión -> Login
-    Navigator.of(context).pushReplacement(
-      MaterialPageRoute(builder: (context) => const LoginScreen()),
-    );
-  } else if (userRol == 'cliente') {
-    // 2. Es Cliente
-    if (barberiaId == null || barberiaId == 'null') {
-      // 2a. Sin barbería -> Mapa
+    if (userRol == null) {
       Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (context) => const MapScreen()),
+        MaterialPageRoute(builder: (context) => const LoginScreen()),
+      );
+    } else if (userRol == 'cliente') {
+      if (barberiaId == null || barberiaId == 'null') {
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(builder: (context) => const MapScreen()),
+        );
+      } else {
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(builder: (context) => const ClientHomeScreen()),
+        );
+      }
+    } else if (userRol == 'barbero') {
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(builder: (context) => const BarberHomeScreen()),
+      );
+    } else if (userRol == 'admin') {
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(builder: (context) => const AdminHomeScreen()),
       );
     } else {
-      // 2b. Con barbería -> Home Cliente
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (context) => const ClientHomeScreen()),
+       Navigator.of(context).pushReplacement(
+        MaterialPageRoute(builder: (context) => const LoginScreen()),
       );
     }
-  } else if (userRol == 'barbero') { // <-- ¡ESTA ES LA LÍNEA CLAVE!
-    // 3. Es Barbero -> Home Barbero
-    Navigator.of(context).pushReplacement(
-      MaterialPageRoute(builder: (context) => const BarberHomeScreen()), // <-- VA A BARBER HOME
-    );
-  } else if (userRol == 'admin') { // <-- ¡AQUÍ!
-   // 4. Es Admin -> Navegar a AdminHomeScreen
-    Navigator.of(context).pushReplacement(
-     MaterialPageRoute(builder: (context) => const AdminHomeScreen()), // <-- CORREGIDO
-   );
-    // 5. Rol desconocido -> Login
-     Navigator.of(context).pushReplacement(
-       MaterialPageRoute(builder: (context) => const LoginScreen()),
-     );
   }
-}
 
+  // --- NUEVO DISEÑO ---
   @override
   Widget build(BuildContext context) {
-    return const Scaffold(
-      // backgroundColor: Color(0xFF1A1A1A), // Para que coincida con el tema
+    // Usamos el mismo color de fondo que en Login/Registro
+    const Color kDarkBlue = Color(0xFF0a192f); 
+    const Color kLightBlue = Color(0xFF4FC3F7); // Para el loader
+
+    return Scaffold(
+      backgroundColor: kDarkBlue, // Fondo oscuro uniforme
       body: Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Text(
-              'BarberSpot',
-              style: TextStyle(
-                fontSize: 48,
-                fontWeight: FontWeight.bold,
-                color: Colors.white,
-              ),
+            // --- TU LOGO ---
+            Image.asset(
+              'assets/images/BarberSpot1.png', // Ruta correcta
+              height: 200, // Un poco más grande para el Splash
             ),
-            SizedBox(height: 32),
+            const SizedBox(height: 48),
+            
+            // --- INDICADOR DE CARGA ---
             CircularProgressIndicator(
-              color: Colors.white,
+              color: kLightBlue, // Color de acento de tu paleta
             ),
           ],
         ),
