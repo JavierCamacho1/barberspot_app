@@ -1,23 +1,22 @@
+import 'dart:ui'; // Para ImageFilter
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert'; // Para json.encode
 import 'package:intl/intl.dart'; // Para formatear
 
-// Modelo simple para representar un rango de tiempo editable
+// --- MODELOS DE DATOS ---
 class TimeRange {
   TimeOfDay? inicio;
   TimeOfDay? fin;
-  // Usamos un 'key' único para ayudar a Flutter a manejar la lista
-  final UniqueKey key = UniqueKey(); 
+  final UniqueKey key = UniqueKey();
 
   TimeRange({this.inicio, this.fin});
 }
 
-// Modelo para el Horario Semanal (copiado de availability_screen.dart)
 class Disponibilidad {
   final int id;
-  final int diaSemana; // 0=Lunes, 6=Domingo
+  final int diaSemana;
   final TimeOfDay horaInicio;
   final TimeOfDay horaFin;
 
@@ -34,7 +33,6 @@ class Disponibilidad {
         final parts = timeStr.split(':');
         return TimeOfDay(hour: int.parse(parts[0]), minute: int.parse(parts[1]));
       } catch (e) {
-        print("Error parseando hora: $timeStr, $e");
         return TimeOfDay(hour: 0, minute: 0);
       }
     }
@@ -46,6 +44,7 @@ class Disponibilidad {
     );
   }
 }
+// --- FIN MODELOS ---
 
 class EditScheduleScreen extends StatefulWidget {
   const EditScheduleScreen({super.key});
@@ -56,8 +55,8 @@ class EditScheduleScreen extends StatefulWidget {
 
 class _EditScheduleScreenState extends State<EditScheduleScreen> {
   int? _barberId;
-  bool _isLoading = true; // Para la carga inicial
-  bool _isSaving = false; // Para el botón de guardar
+  bool _isLoading = true;
+  bool _isSaving = false;
   String? _error;
 
   final List<String> _diasSemanaNombres = [
@@ -74,7 +73,7 @@ class _EditScheduleScreenState extends State<EditScheduleScreen> {
     _loadInitialData();
   }
 
-  // Carga el ID del barbero y su horario actual
+  // --- LÓGICA DE DATOS Y API ---
   Future<void> _loadInitialData() async {
     final prefs = await SharedPreferences.getInstance();
     _barberId = prefs.getInt('user_id');
@@ -112,67 +111,49 @@ class _EditScheduleScreenState extends State<EditScheduleScreen> {
     }
   }
 
-  // --- Funciones de Acciones (¡IMPLEMENTADAS!) ---
-
-  // Añade un nuevo slot de tiempo (turno) vacío a un día
   void _addTimeSlot(int diaSemana) {
     setState(() {
-      _horarioEditable[diaSemana]?.add(TimeRange()); // Añade un turno vacío
+      _horarioEditable[diaSemana]?.add(TimeRange());
     });
   }
 
-  // Elimina un slot de tiempo (turno) de un día
   void _removeTimeSlot(int diaSemana, UniqueKey key) {
     setState(() {
       _horarioEditable[diaSemana]?.removeWhere((range) => range.key == key);
     });
   }
   
-  // Muestra el selector de hora (TimePicker)
   Future<void> _selectTime(BuildContext context, TimeRange range, bool isStartTime) async {
-     final TimeOfDay? picked = await showTimePicker(
-       context: context,
-       initialTime: (isStartTime ? range.inicio : range.fin) ?? TimeOfDay.now(),
-       builder: (context, child) { // Aplicar tema oscuro
-         return Theme(
-           data: ThemeData.dark().copyWith(
-             colorScheme: const ColorScheme.dark(
-               primary: Colors.blueAccent,
-             ),
-           ),
-           child: child!,
-         );
-       },
-     );
-     if (picked != null) {
-       setState(() {
-         if (isStartTime) {
-           range.inicio = picked;
-         } else {
-           range.fin = picked;
-         }
-       });
-     }
+      final TimeOfDay? picked = await _showGlassTimePicker(
+        context,
+        (isStartTime ? range.inicio : range.fin) ?? TimeOfDay.now()
+      );
+      
+      if (picked != null) {
+        setState(() {
+          if (isStartTime) {
+            range.inicio = picked;
+          } else {
+            range.fin = picked;
+          }
+        });
+      }
   }
 
-  // Función principal para guardar el horario completo
   Future<void> _saveSchedule() async {
     if (_barberId == null) return;
     
-    // 1. Validar y construir el JSON
-    List<Map<String, dynamic>> payload = []; // Lista de horarios para enviar
+    List<Map<String, dynamic>> payload = [];
     
-    for (int dia = 0; dia < 7; dia++) { // Iterar por Lunes (0) a Domingo (6)
+    for (int dia = 0; dia < 7; dia++) {
       final List<TimeRange> turnos = _horarioEditable[dia] ?? [];
       
       for (var turno in turnos) {
-        // Validación A: Asegurarse que ambas horas estén seleccionadas
         if (turno.inicio == null || turno.fin == null) {
           _showError("Por favor, completa todos los campos de hora para el ${_diasSemanaNombres[dia]}.");
           return;
         }
 
-        // Validación B: Asegurarse que la hora de inicio sea ANTES que la hora de fin
         final double inicioDecimal = turno.inicio!.hour + (turno.inicio!.minute / 60.0);
         final double finDecimal = turno.fin!.hour + (turno.fin!.minute / 60.0);
 
@@ -181,11 +162,9 @@ class _EditScheduleScreenState extends State<EditScheduleScreen> {
            return;
         }
 
-        // Convertir TimeOfDay a string "HH:MM:SS" para la API
         final String horaInicioStr = "${turno.inicio!.hour.toString().padLeft(2, '0')}:${turno.inicio!.minute.toString().padLeft(2, '0')}:00";
         final String horaFinStr = "${turno.fin!.hour.toString().padLeft(2, '0')}:${turno.fin!.minute.toString().padLeft(2, '0')}:00";
 
-        // Añadir el turno válido al payload
         payload.add({
           "dia_semana": dia,
           "hora_inicio": horaInicioStr,
@@ -194,7 +173,6 @@ class _EditScheduleScreenState extends State<EditScheduleScreen> {
       }
     }
 
-    // 2. Si llegamos aquí, la validación pasó. Mostramos carga y llamamos a la API.
     if (mounted) setState(() => _isSaving = true);
 
     final String apiUrl = "http://127.0.0.1:8000/barberos/$_barberId/disponibilidad";
@@ -203,32 +181,28 @@ class _EditScheduleScreenState extends State<EditScheduleScreen> {
         final response = await http.put(
           Uri.parse(apiUrl),
           headers: {'Content-Type': 'application/json; charset=UTF-8'},
-          body: json.encode(payload), // Enviamos la lista completa de horarios
+          body: json.encode(payload),
         ).timeout(const Duration(seconds: 15));
 
         if (!mounted) return;
 
         if (response.statusCode == 200) {
-          // ¡Éxito!
           _showSuccess("¡Horario guardado con éxito!");
-          Navigator.of(context).pop(true); // Regresamos (true para refrescar)
+          Navigator.of(context).pop(true);
         } else {
-          // Error del backend (ej. 400 Bad Request)
           final Map<String, dynamic> responseData = json.decode(response.body);
           _showError("Error al guardar: ${responseData['detail'] ?? 'Error desconocido'}");
         }
 
     } catch (e) {
-      // Error de conexión
       _showError("Error de conexión: $e");
     } finally {
        if (mounted) {
-         setState(() => _isSaving = false); // Ocultar indicador de guardado
+         setState(() => _isSaving = false);
        }
     }
   }
   
-  // --- Helpers para mostrar SnackBar ---
   void _showError(String message) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message), backgroundColor: Colors.redAccent));
@@ -241,131 +215,171 @@ class _EditScheduleScreenState extends State<EditScheduleScreen> {
   // --- Construcción de la UI ---
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Editar Horario Semanal'),
-        actions: [
-          // Botón de Guardar
-          if (_isLoading) // No mostrar botón si está cargando
-             Padding(
-               padding: const EdgeInsets.only(right: 16.0),
-               child: Center(child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))),
-             )
-          else if (_isSaving) // Mostrar indicador si está guardando
-             Padding(
-               padding: const EdgeInsets.only(right: 16.0),
-               child: Center(child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))),
-             )
-          else // Mostrar botón de guardar
-            IconButton(
-              icon: const Icon(Icons.save),
-              tooltip: 'Guardar Horario',
-              onPressed: _saveSchedule,
+    return Stack(
+      children: [
+        // Capa 1: Fondo Gradiente
+        Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [Color(0xFF1A237E), Color(0xFF000000)],
             ),
-        ],
-      ),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : _error != null
-              ? Center(child: Text(_error!)) // TODO: Mejorar vista de error
-              : _buildScheduleEditor(),
+          ),
+        ),
+        
+        // Capa 2: Contenido
+        Scaffold(
+          backgroundColor: Colors.transparent,
+          extendBodyBehindAppBar: true,
+          appBar: AppBar(
+            title: const Text('Editar Horario Semanal', style: TextStyle(color: Colors.white)),
+            backgroundColor: Colors.transparent,
+            elevation: 0,
+            iconTheme: const IconThemeData(color: Colors.white),
+            flexibleSpace: ClipRRect(
+              child: BackdropFilter(
+                filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                child: Container(color: Colors.black.withOpacity(0.2)),
+              ),
+            ),
+            actions: [
+              if (_isLoading)
+                const Padding(
+                  padding: EdgeInsets.only(right: 16.0),
+                  child: Center(child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))),
+                )
+              else if (_isSaving)
+                const Padding(
+                  padding: EdgeInsets.only(right: 16.0),
+                  child: Center(child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))),
+                )
+              else
+                IconButton(
+                  icon: const Icon(Icons.save_outlined),
+                  tooltip: 'Guardar Horario',
+                  onPressed: _saveSchedule,
+                ),
+            ],
+          ),
+          body: _isLoading
+              ? const Center(child: CircularProgressIndicator(color: Colors.white))
+              : _error != null
+                  ? Center(child: Text(_error!, style: TextStyle(color: Colors.red[300])))
+                  : _buildScheduleEditor(),
+        ),
+      ],
     );
   }
 
-  // Construye la lista de los 7 días
   Widget _buildScheduleEditor() {
+    final double topPadding = kToolbarHeight + MediaQuery.of(context).padding.top;
+    
     return ListView.builder(
-      padding: const EdgeInsets.all(8.0),
-      itemCount: _diasSemanaNombres.length, // 7 días
+      padding: EdgeInsets.fromLTRB(12.0, topPadding + 12.0, 12.0, 12.0),
+      itemCount: _diasSemanaNombres.length,
       itemBuilder: (context, index) {
-        final int diaSemana = index; // 0 = Lunes, 1 = Martes...
+        final int diaSemana = index;
         final String nombreDia = _diasSemanaNombres[diaSemana];
         final List<TimeRange> turnos = _horarioEditable[diaSemana] ?? [];
 
-        return Card(
-          margin: const EdgeInsets.symmetric(vertical: 8.0),
-          child: Padding(
+        return _buildGlassDayCard(nombreDia, turnos, diaSemana);
+      },
+    );
+  }
+
+  // --- WIDGETS HELPER DE VIDRIO ---
+
+  Widget _buildGlassDayCard(String nombreDia, List<TimeRange> turnos, int diaSemana) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8.0),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(15.0),
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 5.0, sigmaY: 5.0),
+          child: Container(
             padding: const EdgeInsets.all(12.0),
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(15.0),
+              border: Border.all(color: Colors.white.withOpacity(0.2)),
+            ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Encabezado del Día (Lunes, Martes...)
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Text(
                       nombreDia,
-                      style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                      style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.white),
                     ),
                     IconButton(
-                      icon: const Icon(Icons.add_box_rounded, color: Colors.green),
-                      tooltip: 'Añadir turno (ej. para descansos)',
+                      icon: const Icon(Icons.add_box_rounded, color: Colors.greenAccent),
+                      tooltip: 'Añadir turno',
                       onPressed: () => _addTimeSlot(diaSemana),
                     ),
                   ],
                 ),
-                const Divider(),
+                const Divider(color: Colors.white24),
                 
-                // Si no hay turnos (Día libre)
                 if (turnos.isEmpty)
                   const Padding(
                     padding: EdgeInsets.symmetric(vertical: 16.0),
                     child: Center(
                       child: Text(
                         'Día Libre (No disponible)',
-                        style: TextStyle(color: Colors.grey, fontStyle: FontStyle.italic),
+                        style: TextStyle(color: Colors.white70, fontStyle: FontStyle.italic),
                       ),
                     ),
                   ),
 
-                // Lista de turnos (TimeRange) para este día
                 ListView.builder(
                   shrinkWrap: true,
                   physics: const NeverScrollableScrollPhysics(),
                   itemCount: turnos.length,
                   itemBuilder: (context, indexTurno) {
                     final range = turnos[indexTurno];
-                    // Usamos la 'key' única para que Flutter identifique la fila
                     return _buildTimeSlotRow(range, diaSemana, range.key); 
                   },
                 ),
               ],
             ),
           ),
-        );
-      },
+        ),
+      ),
     );
   }
 
-  // Construye la fila para un solo turno (ej. [ 9:00 AM ] - [ 5:00 PM ] [X] )
   Widget _buildTimeSlotRow(TimeRange range, int diaSemana, UniqueKey key) {
     final format = MaterialLocalizations.of(context);
     
     return Padding(
-      // Usamos la 'key' única aquí
-      key: key, 
+      key: key,
       padding: const EdgeInsets.symmetric(vertical: 4.0),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          // Botón Hora Inicio
-          Expanded( // Damos espacio flexible
+          Expanded(
             flex: 2,
-            child: TextButton(
+            child: _buildTimeButton(
+              time: range.inicio,
+              label: 'Inicio',
               onPressed: () => _selectTime(context, range, true),
-              child: Text(range.inicio != null ? format.formatTimeOfDay(range.inicio!) : 'Inicio'),
             ),
           ),
-          const Text('-'),
-          // Botón Hora Fin
-          Expanded( // Damos espacio flexible
+          const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 8.0),
+            child: Text('-', style: TextStyle(color: Colors.white70, fontSize: 16)),
+          ),
+          Expanded(
             flex: 2,
-            child: TextButton(
+            child: _buildTimeButton(
+              time: range.fin,
+              label: 'Fin',
               onPressed: () => _selectTime(context, range, false),
-              child: Text(range.fin != null ? format.formatTimeOfDay(range.fin!) : 'Fin'),
             ),
           ),
-          // Botón Eliminar Turno
           IconButton(
             icon: const Icon(Icons.remove_circle_outline, color: Colors.redAccent),
             onPressed: () => _removeTimeSlot(diaSemana, key),
@@ -373,6 +387,56 @@ class _EditScheduleScreenState extends State<EditScheduleScreen> {
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildTimeButton({
+    required TimeOfDay? time,
+    required String label,
+    required VoidCallback onPressed,
+  }) {
+    final format = MaterialLocalizations.of(context);
+    final bool hasTime = time != null;
+    
+    return TextButton(
+      onPressed: onPressed,
+      style: TextButton.styleFrom(
+        backgroundColor: hasTime ? Colors.white.withOpacity(0.2) : Colors.white.withOpacity(0.1),
+        foregroundColor: Colors.white,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(10.0),
+          side: BorderSide(
+            color: hasTime ? Colors.white.withOpacity(0.3) : Colors.white.withOpacity(0.2)
+          ),
+        ),
+      ),
+      child: Text(
+        time != null ? format.formatTimeOfDay(time) : label,
+        style: TextStyle(
+          fontWeight: hasTime ? FontWeight.bold : FontWeight.normal,
+        ),
+      ),
+    );
+  }
+  
+  Future<TimeOfDay?> _showGlassTimePicker(BuildContext context, TimeOfDay initialTime) {
+    return showTimePicker(
+      context: context,
+      initialTime: initialTime,
+      builder: (context, child) {
+        return Theme(
+          data: ThemeData.dark().copyWith(
+             colorScheme: const ColorScheme.dark(
+               primary: Colors.blueAccent,
+               onPrimary: Colors.white,
+               surface: Color(0xFF2C2C2C),
+               onSurface: Colors.white,
+             ),
+             dialogBackgroundColor: const Color(0xFF2C2C2C).withOpacity(0.85),
+          ),
+          child: child!,
+        );
+      },
     );
   }
 }

@@ -152,7 +152,7 @@ class _AgendarCitaScreenState extends State<AgendarCitaScreen> {
     // Este es el NUEVO ENDPOINT que necesitas crear en tu backend (FastAPI)
     // Debe devolver una lista de strings con las horas disponibles, ej: ["09:00", "10:30", "14:00"]
     final String fechaISO = _selectedDate!.toIso8601String().split('T').first;
-    final String apiUrl = "http://127.0.0.1:8000/barberos/${_selectedBarbero!.id}/disponibilidad?fecha=$fechaISO";
+    final String apiUrl = "http://127.0.0.1:8000/barberos/${_selectedBarbero!.id}/disponibilidad-por-fecha?fecha=$fechaISO";
     
     print("Llamando a API de disponibilidad: $apiUrl"); // Para debug
 
